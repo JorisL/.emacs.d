@@ -1,0 +1,345 @@
+#+TITLE: DotEmacs
+#+PROPERTY: header-args :results silent
+
+* Generic Emacs settings
+** Better defaults
+Here are some better default settings
+
+#+BEGIN_SRC emacs-lisp
+  (setq-default
+   ad-redefinition-action 'accept         ; Silence warnings for redefinition
+   auto-save-list-file-prefix nil         ; Prevent tracking for auto-saves
+   cursor-in-non-selected-windows nil     ; Hide the cursor in inactive windows
+   cursor-type 'bar                       ; Prefer a bar-shaped cursor
+   custom-unlispify-menu-entries nil      ; Prefer kebab-case for titles
+   custom-unlispify-tag-names nil         ; Prefer kebab-case for symbols
+   delete-by-moving-to-trash t            ; Delete files to trash
+   fill-column 120                        ; Set width for automatic line breaks
+   gc-cons-threshold (* 8 1024 1024)      ; We're not using Game Boys anymore
+   help-window-select t                   ; Focus new help windows when opened
+   indent-tabs-mode nil                   ; Stop using tabs to indent
+   inhibit-startup-screen t               ; Disable start-up screen
+   initial-scratch-message ""             ; Empty the initial *scratch* buffer
+   mouse-yank-at-point t                  ; Yank at point rather than pointer
+   recenter-positions '(5 top bottom)     ; Set re-centering positions
+   scroll-conservatively 101              ; Avoid recentering when scrolling far
+   scroll-margin 2                        ; Add a margin when scrolling vertically
+   select-enable-clipboard t              ; Merge system's and Emacs' clipboard
+   sentence-end-double-space nil          ; Use a single space after dots
+   tab-width 4                            ; Set width for tabs
+   uniquify-buffer-name-style 'forward    ; Uniquify buffer names
+   window-combination-resize t            ; Resize windows proportionally
+   window-divider-default-right-width 2   ; Thin window vertical dividers
+   x-stretch-cursor t)                    ; Stretch cursor to the glyph width
+  (delete-selection-mode 1)               ; Replace region when inserting text
+  (fset 'yes-or-no-p 'y-or-n-p)           ; Replace yes/no prompts with y/n
+  (global-subword-mode 1)                 ; Iterate through CamelCase words
+  (tool-bar-mode 0)                       ; Disable the tool bar
+  (mouse-avoidance-mode 'exile)           ; Avoid collision of mouse with point
+  (put 'downcase-region 'disabled nil)    ; Enable downcase-region
+  (put 'upcase-region 'disabled nil)      ; Enable upcase-region
+  (global-auto-revert-mode t)             ; Auto reload files from disk
+#+END_SRC
+
+Use =.emacscache/= to contain local data. This is to avoid littering in the Emacs
+directory with an ever-growing number of packages used on a daily basis.
+
+#+BEGIN_SRC emacs-lisp
+  (defconst me/cache-directory
+    (expand-file-name ".emacscache/")
+    "Directory where all cache files should be saved")
+
+  (defun me/cache-concat (name)
+    "Return the absolute path of NAME under `me/cache-directory'."
+    (let ((directory (file-name-as-directory me/cache-directory)))
+      (make-directory directory t)
+      (convert-standard-filename (concat directory name))))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (with-eval-after-load 'request
+    (setq-default request-storage-directory (me/cache-concat "request/")))
+  (with-eval-after-load 'tramp
+    (setq-default tramp-persistency-file-name (me/cache-concat "tramp")))
+  (with-eval-after-load 'url
+    (setq-default url-configuration-directory (me/cache-concat "url/")))
+#+END_SRC
+
+On  also use ⌘ as =meta=.
+#+BEGIN_SRC emacs-lisp
+  (setq mac-command-modifier 'meta)
+#+END_SRC
+
+Always use unicode:
+#+begin_src emacs-lisp
+  (set-charset-priority 'unicode)
+  (setq locale-coding-system 'utf-8)
+  (set-terminal-coding-system 'utf-8)
+  (set-keyboard-coding-system 'utf-8)
+  (set-selection-coding-system 'utf-8)
+  (prefer-coding-system 'utf-8)
+  (setq default-process-coding-system '(utf-8-unix . utf-8-unix))
+#+end_src
+
+...
+#+begin_src emacs-lisp
+  (delete-selection-mode t)
+  (global-display-line-numbers-mode t)
+  (column-number-mode)
+#+end_src
+
+Highlight current line, but only when in text or programming mode
+#+begin_src emacs-lisp
+  (require 'hl-line)
+  (add-hook 'prog-mode-hook #'hl-line-mode)
+  (add-hook 'text-mode-hook #'hl-line-mode)
+  (set-face-attribute 'hl-line nil :background "gray21")
+#+end_src
+
+Emacs is super fond of littering filesystems with backups and autosaves,
+since it was built with the assumption that multiple users could be using the same Emacs instance on the same filesystem. 
+This was valid in 1980. It is no longer the case.
+#+begin_src emacs-lisp
+  (setq
+   make-backup-files nil
+   auto-save-default nil
+   create-lockfiles nil)
+#+end_src
+
+...
+#+begin_src emacs-lisp
+  (electric-pair-mode)
+#+end_src
+
+
+** Load secrets
+Load secrets (or other things that shouldn't be included in version control) from =.secrets.el=.
+This is also where machine specific settings should be stored.
+
+The variables over here are default values for when they aren't defined in =.secrets.el=.
+Use the ~(setq variable value)~ syntax in that file, since the variable is already initialized over here.
+
+#+BEGIN_SRC emacs-lisp
+(defvar me/erc-nick           nil       "The ERC nick to use.")
+(defvar me/erc-password       nil       "The ERC password to use.")
+(defvar me/erc-port           nil       "The ERC port to use.")
+(defvar me/erc-server         nil       "The ERC server to use.")
+(defvar me/font-family        "Monaco"  "The font to use.")
+(defvar me/font-size-default  120       "The font size to use for default text.")
+(defvar me/font-size-large    1.2       "The font size to use for larger text.")
+(defvar me/font-size-small    .8        "The font size to use for smaller text.")
+
+(setq org-directory "~/org")
+
+
+(let ((secrets.el (expand-file-name ".secrets.el")))
+  (load secrets.el t))
+#+END_SRC
+
+** Theme
+Configure [[https://github.com/hlissner/emacs-doom-themes][Doom-Nord]] color theme.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package doom-themes
+    :ensure t
+    :config
+    (load-theme 'doom-nord t)
+    (doom-themes-org-config)
+    (doom-themes-visual-bell-config)
+    (doom-themes-set-faces nil
+      '(default :font me/font-family :height me/font-size-default)
+      '(doom-modeline-bar :background 'unspecified)
+      '(flycheck-error :underline `(:color ,error :style line))
+      '(flycheck-info :underline `(:color ,highlight :style line))
+      '(flycheck-warning :underline `(:color ,warning :style line))
+      '(fringe :background 'unspecified)
+      '(helpful-heading :height 'unspecified)
+      '(org-block-begin-line :background 'unspecified :inherit 'shadow)
+      '(org-quote :background 'unspecified :inherit '(font-lock-doc-face org-block))
+      '(swiper-line-face :extend t)
+      '(vertical-border :background 'unspecified :inverse-video t)
+      '(which-key-command-description-face :foreground 'unspecified)))
+#+END_SRC
+
+** God mode
+[[https://github.com/emacsorphanage/god-mode][God mode]] is used to get modal editing with regular emacs keybindings.
+When god mode is enabled you dont have to chord Ctrl/Meta.
+As an example: =xs= becomes =C-x C-s=.
+By default all pressed keys are combined with Ctrl, but by first pressing =g= it is changed to Meta.
+For example: =gx= becomes =M-x=.
+The mode can be toggled using =Esc=.
+
+#+BEGIN_SRC emacs-lisp
+    (use-package god-mode
+      :disabled
+      :ensure t
+      :bind (("<escape>" . god-mode)
+             ("C-x C-1" . delete-other-windows)
+             ("C-x C-2" . split-window-below)
+             ("C-x C-3" . split-window-right)
+             ("C-x C-0" . delete-window)
+             ("C-z" . repeat)
+             ("C-i" . god-mode))
+      :config
+      (defun my-update-cursor ()
+        (setq cursor-type (if (or god-local-mode buffer-read-only)
+                              'box
+                            'bar)))
+      (add-hook 'god-mode-enabled-hook 'my-update-cursor)
+      (add-hook 'god-mode-disabled-hook 'my-update-cursor))
+#+END_SRC
+
+** Command completion
+=ivy= is a command completion framework, which replaces the normal command completion dialogs.
+#+BEGIN_SRC emacs-lisp
+  (use-package ivy
+    :ensure t
+    :config
+    (ivy-mode t))
+#+END_SRC
+
+By default =ivy= starts filters with =^= (e.g. must match at the beginning).
+Change it to not do this, since I often search for a file/command without knowing the exact name at the start (and I'm tired of backspacing the =^= each time).
+#+BEGIN_SRC emacs-lisp
+  (setq ivy-initial-inputs-alist nil)
+#+END_SRC
+
+=counsel= is a collection of =ivy= enhanced versions of normal Emacs commands.
+#+BEGIN_SRC emacs-lisp
+  (use-package counsel
+    :ensure t
+    :bind (("M-x" . counsel-M-x)))
+#+END_SRC
+
+=swiper= is an =ivy= enhanched version of isearch.
+#+BEGIN_SRC emacs-lisp
+  (use-package swiper
+    :ensure t
+    :bind (("M-s" . counsel-grep-or-swiper)))
+#+END_SRC
+
+** Suggest next key
+=which-key= suggests possible keys when pressing a key combination.
+#+BEGIN_SRC emacs-lisp
+  (use-package which-key
+    :ensure t
+    :config
+    (add-hook 'after-init-hook 'which-key-mode))
+#+END_SRC
+
+** Undo tree
+Emacs let's you undo undo's, thanks to which the undo system is powerfull but sometimes quite complex.
+=undo-tree= visualises the undo history to make it easier to navigate.
+#+BEGIN_SRC emacs-lisp
+  (use-package undo-tree
+    :ensure t
+    :defer 5
+    :config
+    (global-undo-tree-mode 1))
+#+END_SRC
+
+** Expand region
+=expand-region= expands the selection region by semantic units.
+
+As example:
+    : (setq alphabet-start "abc def")
+when the cursor is on c, =expand-region= will select the word, after that everything within quotes, after that including quotes, then everything within brackets, and then including brackets.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package expand-region
+    :ensure t
+    :bind ("C-=" . er/expand-region))
+#+END_SRC
+
+** Snippets
+TODO: explenation
+
+#+BEGIN_SRC emacs-lisp
+  (use-package yasnippet
+    :ensure t
+    :config
+    (add-to-list 'yas-snippet-dirs "~/.emacs.d/snippets")
+    (yas-global-mode 1))
+
+  (use-package yasnippet-snippets
+    :ensure t)
+#+END_SRC
+
+** Multiple cursors
+=iedit= is used for modifing all instances of the selected word/symbol.
+This is triggered by =C-;=.
+#+begin_src emacs-lisp
+  (use-package iedit
+    :ensure t)
+#+end_src
+
+* STARTED Org mode
+** Basic settings
+#+begin_src emacs-lisp
+  (setq org-startup-indented 'f)
+  (setq org-special-ctrl-a/e 't)
+  (setq org-default-notes-file (concat org-directory "/notes.org"))
+  (defvar org-default-todo-file (concat org-directory "/todo.org"))
+  (defvar org-default-read-it-later-file (concat org-directory "/read_it_later.org"))
+  (define-key global-map "\C-cc" 'org-capture)
+  (global-set-key "\C-cl" 'org-store-link)
+  (global-set-key "\C-ca" 'org-agenda)
+  (setq org-src-fontify-natively 't)
+  ;(setq org-src-tab-acts-natively t)
+  (setq org-src-window-setup 'current-window)
+  (setq org-todo-keywords
+        '((sequence "TODO" "STARTED" "WAITING" "|" "DONE" "CANCELLED")))
+#+end_src
+
+** TODO Agenda
+
+** TODO Capture templates
+#+begin_src emacs-lisp
+  (defvar org-capture-templates
+    '( ("t" "Todo" entry (file org-default-todo-file)
+        "* TODO %?\n%U" :empty-lines 1)
+       ("T" "Todo with Clipboard" entry (file org-default-todo-file)
+        "* TODO %?\n%U\n   %c" :empty-lines 1)
+       ("n" "Note" entry (file org-default-notes-file)
+        "* NOTE %?\n%U" :empty-lines 1)       
+       ("N" "Note with Clipboard" entry (file org-default-notes-file)
+        "* NOTE %?\n%U\n   %c" :empty-lines 1)
+       ("r" "Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
+        "* [[%^{link}][%^{description}]] \nCaptured On: %U%?")
+       ("R" "Protocol Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
+        "* [[%:link][%:description]] \nCaptured On: %U%?")))
+#+end_src
+
+* Programming
+** Generic
+*** Auto completion
+=company-mode= (Complete Anything) is used as autocomplete engine.
+#+begin_src emacs-lisp
+  (use-package company
+    :disabled
+    :ensure t
+    :hook
+    (after-init . global-company-mode))
+#+end_src
+
+#+begin_src emacs-lisp
+  (use-package company-box
+    :disabled
+    :ensure t
+    :hook
+    (company-mode . company-box-mode)
+    :custom
+    (company-box-enable-icon nil)
+    (company-box-max-candidates 50)
+    (company-box-scrollbar nil)
+    (company-box-show-single-candidate 'always))
+#+end_src
+
+#+begin_src emacs-lisp
+
+#+end_src
+
+
+** Python
+** MATLAB
+** Julia
