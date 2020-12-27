@@ -1,0 +1,7 @@
+#+TITLE: .emacs.d README
+My Emacs config.
+
+The config is mainly written using org-babel in =dotemacs.org=.
+=init.el= has some boilerplate code to load the main configuration.
+
+=.secrets.el= is a file that should be added manually since it hosts info that shouldn't be in git (example; computer specific info, passwords, etc.).
