@@ -1,7 +1,108 @@
 #+TITLE: DotEmacs
 #+PROPERTY: header-args :results silent
 
+* Helper functions / definitions
+These are some functions / defenitions used for this config.
+#+begin_src emacs-lisp
+  (defconst IS-MAC     (eq system-type 'darwin))
+  (defconst IS-LINUX   (eq system-type 'gnu/linux))
+  (defconst IS-WINDOWS (memq system-type '(cygwin windows-nt ms-dos)))
+  (defconst IS-BSD     (or IS-MAC (eq system-type 'berkeley-unix)))
+#+end_src
+
+Unix tools look for HOME, but this is normally not defined on Windows.
+
+#+begin_src emacs-lisp
+  (when (and IS-WINDOWS (null (getenv-internal "HOME")))
+    (setenv "HOME" (getenv "USERPROFILE"))
+    (setq abbreviated-home-dir nil))
+#+end_src
+
 * Generic Emacs settings
+** Optimizations
+Note: most of these optimizations are taken from [[https://github.com/hlissner/doom-emacs/][doom emacs]] (core.el).
+
+Speed up startup by increasing garbage collection treshhold during startup
+#+begin_src emacs-lisp
+  (defvar default-file-name-handler-alist file-name-handler-alist)
+  (setq file-name-handler-alist nil)
+  (setq gc-cons-threshold 80000000)
+  (add-hook 'emacs-startup-hook
+            (lambda ()
+              "Restore defalut values after init."
+              (setq file-name-handler-alist default-file-name-handler-alist)
+              (setq gc-cons-threshold 800000)
+              (if (boundp 'after-focus-change-function)
+                  (add-function :after after-focus-change-function
+                                (lambda ()
+                                  (unless (frame-focus-state)
+                                    (garbage-collect))))
+                (add-hook 'after-focus-change-function 'garbage-collect))))
+#+end_src
+
+A second, case-insensitive pass over `auto-mode-alist' is time wasted,
+and indicates misconfiguration (or that the user needs to stop relying on case insensitivity).
+#+begin_src emacs-lisp
+  (setq auto-mode-case-fold nil)
+#+end_src
+
+Disable bidirectional text rendering for a modest performance boost.
+I've set this to `nil' in the past, but the `bidi-display-reordering's docs say
+that is an undefined state and suggest this to be just as good:
+#+begin_src emacs-lisp
+  (setq-default bidi-display-reordering 'left-to-right
+                bidi-paragraph-direction 'left-to-right)
+#+end_src
+
+Disabling the BPA makes redisplay faster, but might produce incorrect display
+reordering of bidirectional text with embedded parentheses and other bracket
+characters whose 'paired-bracket' Unicode property is non-nil.
+#+begin_src emacs-lisp
+  (setq bidi-inhibit-bpa t)  ; Emacs 27 only
+#+end_src
+
+More performant rapid scrolling over unfontified regions.
+May cause brief spells of inaccurate syntax highlighting right after scrolling,
+which should quickly self-correct.
+#+begin_src emacs-lisp
+  (setq fast-but-imprecise-scrolling t)
+#+end_src
+
+Reduce rendering/line scan work for Emacs by not rendering cursors or regions in non-focused windows.
+#+begin_src emacs-lisp
+  (setq-default cursor-in-non-selected-windows nil)
+  (setq highlight-nonselected-windows nil)
+#+end_src
+
+Emacs "updates" its ui more often than it needs to, so we slow it down slightly from 0.5s:
+#+begin_src emacs-lisp
+  (setq idle-update-delay 1.0)
+#+end_src
+
+Font compacting can be terribly expensive, especially for rendering icon fonts on Windows.
+Whether disabling it has a notable affect on Linux and Mac hasn't been determined,
+but we inhibit it there anyway.
+This increases memory usage, however!
+#+begin_src emacs-lisp
+  (setq inhibit-compacting-font-caches t)
+#+end_src
+
+Performance on Windows is considerably worse than elsewhere.
+We'll need everything we can get.
+#+begin_src emacs-lisp
+;  (when IS-WINDOWS
+;    (setq w32-get-true-file-attributes nil   ; decrease file IO workload
+;          w32-pipe-read-delay 0              ; faster ipc
+;          w32-pipe-buffer-size (* 64 1024))) ; read more at a time (was 4K)
+#+end_src
+
+Remove command line options that aren't relevant to our current OS;
+means slightly less to process at startup.
+#+begin_src emacs-lisp
+  (unless IS-MAC   (setq command-line-ns-option-alist nil))
+  (unless IS-LINUX (setq command-line-x-option-alist nil))
+#+end_src
+
 ** Better defaults
 Here are some better default settings
 
@@ -15,7 +116,6 @@ Here are some better default settings
    custom-unlispify-tag-names nil         ; Prefer kebab-case for symbols
    delete-by-moving-to-trash t            ; Delete files to trash
    fill-column 120                        ; Set width for automatic line breaks
-   gc-cons-threshold (* 8 1024 1024)      ; We're not using Game Boys anymore
    help-window-select t                   ; Focus new help windows when opened
    indent-tabs-mode nil                   ; Stop using tabs to indent
    inhibit-startup-screen t               ; Disable start-up screen
@@ -30,6 +130,8 @@ Here are some better default settings
    uniquify-buffer-name-style 'forward    ; Uniquify buffer names
    window-combination-resize t            ; Resize windows proportionally
    window-divider-default-right-width 2   ; Thin window vertical dividers
+   global-auto-revert-non-file-buffers t  ; Auto refresh dired buffers
+   auto-revert-verbose nil                ; Be silent when dired auto-refreshes
    x-stretch-cursor t)                    ; Stretch cursor to the glyph width
   (delete-selection-mode 1)               ; Replace region when inserting text
   (fset 'yes-or-no-p 'y-or-n-p)           ; Replace yes/no prompts with y/n
@@ -108,9 +210,15 @@ This was valid in 1980. It is no longer the case.
 
 ...
 #+begin_src emacs-lisp
-  (electric-pair-mode)
+  ;(electric-pair-mode)
+  ;; disable <> auto pairing in electric-pair-mode for org-mode
+  ;(add-hook
+  ; 'org-mode-hook
+  ; (lambda ()
+  ;   (setq-local electric-pair-inhibit-predicate
+  ;               `(lambda (c)
+  ;                  (if (char-equal c ?<) t (,electric-pair-inhibit-predicate c))))))
 #+end_src
-
 
 ** Load secrets
 Load secrets (or other things that shouldn't be included in version control) from =.secrets.el=.
@@ -130,7 +238,7 @@ Use the ~(setq variable value)~ syntax in that file, since the variable is alrea
 (defvar me/font-size-small    .8        "The font size to use for smaller text.")
 
 (setq org-directory "~/org")
-
+(defvar me/org-roam-directory "~/org/roam")
 
 (let ((secrets.el (expand-file-name ".secrets.el")))
   (load secrets.el t))
@@ -257,6 +365,7 @@ TODO: explenation
 #+BEGIN_SRC emacs-lisp
   (use-package yasnippet
     :ensure t
+    :disabled
     :config
     (add-to-list 'yas-snippet-dirs "~/.emacs.d/snippets")
     (yas-global-mode 1))
@@ -276,6 +385,7 @@ This is triggered by =C-;=.
 * STARTED Org mode
 ** Basic settings
 #+begin_src emacs-lisp
+  (require 'org-tempo)
   (setq org-startup-indented 'f)
   (setq org-special-ctrl-a/e 't)
   (setq org-default-notes-file (concat org-directory "/notes.org"))
@@ -293,24 +403,56 @@ This is triggered by =C-;=.
 
 ** TODO Agenda
 
-** TODO Capture templates
+** Org-roam
+[[https://www.orgroam.com/][Org-roam]] is an org-mode based personal knowledge managing system.
 #+begin_src emacs-lisp
-  (defvar org-capture-templates
-    '( ("t" "Todo" entry (file org-default-todo-file)
-        "* TODO %?\n%U" :empty-lines 1)
-       ("T" "Todo with Clipboard" entry (file org-default-todo-file)
-        "* TODO %?\n%U\n   %c" :empty-lines 1)
-       ("n" "Note" entry (file org-default-notes-file)
-        "* NOTE %?\n%U" :empty-lines 1)       
-       ("N" "Note with Clipboard" entry (file org-default-notes-file)
-        "* NOTE %?\n%U\n   %c" :empty-lines 1)
-       ("r" "Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
-        "* [[%^{link}][%^{description}]] \nCaptured On: %U%?")
-       ("R" "Protocol Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
-        "* [[%:link][%:description]] \nCaptured On: %U%?")))
+  (use-package org-roam
+        :ensure t
+        :hook
+        (after-init . org-roam-mode)
+        :custom
+        (org-roam-directory me/org-roam-directory)
+        :bind (:map org-roam-mode-map
+                (("C-c n l" . org-roam)
+                 ("C-c n f" . org-roam-find-file)
+                 ("C-c n g" . org-roam-graph)
+                 ("C-c n t" . org-roam-dailies-find-today))
+                :map org-mode-map
+                (("C-c n i" . org-roam-insert))
+                (("C-c n I" . org-roam-insert-immediate))))
 #+end_src
 
-* Programming
+Setup daily notes
+#+begin_src emacs-lisp
+  (setq org-roam-dailies-directory "daily/")
+
+  (setq org-roam-dailies-capture-templates
+        '(("d" "default" entry
+           #'org-roam-capture--get-point
+           "* %?"
+           :file-name "daily/%<%Y-%m-%d>"
+           :head "#+title: %<%Y-%m-%d>\n\n")))
+#+end_src
+
+** TODO Capture templates
+#+begin_src emacs-lisp
+;  (defvar org-capture-templates
+;    '( ("t" "Todo" entry (file org-default-todo-file)
+;        "* TODO %?\n%U" :empty-lines 1)
+;       ("T" "Todo with Clipboard" entry (file org-default-todo-file)
+;        "* TODO %?\n%U\n   %c" :empty-lines 1)
+;       ("n" "Note" entry (file org-default-notes-file)
+;        "* NOTE %?\n%U" :empty-lines 1)       
+;       ("N" "Note with Clipboard" entry (file org-default-notes-file)
+;        "* NOTE %?\n%U\n   %c" :empty-lines 1)
+;       ("r" "Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
+;        "* [[%^{link}][%^{description}]] \nCaptured On: %U%?")
+;       ("R" "Protocol Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
+;        "* [[%:link][%:description]] \nCaptured On: %U%?")))
+#+end_src
+
+* TODO Magit
+* TODO Programming
 ** Generic
 *** Auto completion
 =company-mode= (Complete Anything) is used as autocomplete engine.
@@ -335,10 +477,25 @@ This is triggered by =C-;=.
     (company-box-show-single-candidate 'always))
 #+end_src
 
-#+begin_src emacs-lisp
+*** Show function being written
+In the modline, show the function being written:
 
+#+begin_src emacs-lisp
+  (add-hook 'prog-mode-hook #'which-function-mode)
+  (add-hook 'org-mode-hook  #'which-function-mode)
 #+end_src
 
+** Lisp
+Always make sure that there are matching parens
+#+begin_src emacs-lisp
+  (add-hook 'emacs-lisp-mode-hook #'check-parens)
+#+end_src
+
+Highlight defined lisp symbols (when in elisp mode).
+#+begin_src emacs-lisp
+  (use-package highlight-defined
+    :hook (emacs-lisp-mode . highlight-defined-mode))
+#+end_src
 
 ** Python
 ** MATLAB
