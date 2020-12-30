@@ -1,3 +1,10 @@
+# Everything
+*
+# Except
+!init.el
+!dotemacs.org
+!README.org
+
 # Compiled
 *.elc
 
