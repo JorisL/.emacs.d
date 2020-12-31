@@ -285,12 +285,11 @@ The mode can be toggled using =Esc=.
 #+BEGIN_SRC emacs-lisp
   (use-package god-mode
     :ensure t
-    :bind (("<escape>" . god-mode)
+    :bind (("<escape>" . god-mode-all)
            ("C-x C-1" . delete-other-windows)
            ("C-x C-2" . split-window-below)
            ("C-x C-3" . split-window-right)
-           ("C-x C-0" . delete-window)
-           ("C-z" . repeat)))
+           ("C-x C-0" . delete-window)))
     :config
     (defun my-god-mode-update-cursor ()
       (setq cursor-type (if (or god-local-mode buffer-read-only)
@@ -298,8 +297,16 @@ The mode can be toggled using =Esc=.
                           'bar)))
     (add-hook 'god-mode-enabled-hook #'my-god-mode-update-cursor)
     (add-hook 'god-mode-disabled-hook #'my-god-mode-update-cursor)
+    (define-key god-local-mode-map (kbd "z") #'repeat)
+    ;(define-key god-local-mode-map (kbd "i") #'god-local-mode)
 #+END_SRC
 
+** Custom keybindings
+Map =comment-line= (normally =C-x C-;=) to =C-;=.
+This is especially usefull with god-mode
+#+begin_src emacs-lisp
+  (global-set-key (kbd "C-;") 'comment-line)
+#+end_src
 ** Command completion
 =ivy= is a command completion framework, which replaces the normal command completion dialogs.
 #+BEGIN_SRC emacs-lisp
@@ -384,6 +391,37 @@ Use =doom-modeline= to get a cleaner and more usable modeline
     :ensure t
     :init (doom-modeline-mode 1))
 #+end_src
+
+Also show the battery level (helpfull with MacOS when Emacs is in full screen)
+#+begin_src emacs-lisp
+  (display-battery-mode 1)
+#+end_src
+** Prettify symbols
+Enable =prettify-simbols= mode.
+This will visually replace certain sets of characters by other characters (for example in elisp; lambda by λ)
+#+begin_src emacs-lisp
+  (global-prettify-symbols-mode 1)
+#+end_src
+
+** Auto complete
+Use =company-mode= for autocompletion.
+#+begin_src emacs-lisp
+  (use-package company
+    :ensure t
+    :defer t
+    :init (global-company-mode)
+    :config
+    (progn
+      ;; Use Company for completion
+      (bind-key [remap completion-at-point] #'company-complete company-mode-map)
+
+      (setq company-tooltip-align-annotations t
+            ;; Easy navigation to candidates with M-<n>
+            company-show-numbers t)
+      (defvar company-dabbrev-downcase nil))
+    :diminish company-mode)
+#+end_src
+
 * STARTED Org mode
 ** Basic settings
 #+begin_src emacs-lisp
@@ -401,8 +439,23 @@ Use =doom-modeline= to get a cleaner and more usable modeline
   (setq org-src-window-setup 'current-window)
   (setq org-todo-keywords
         '((sequence "TODO" "STARTED" "WAITING" "|" "DONE" "CANCELLED")))
+  (setq org-pretty-entities t)
 #+end_src
 
+Quick hack to get company autocomplete working with =#-= in org-mode
+#+begin_src emacs-lisp
+  (defun trigger-org-company-complete ()
+    "Begins company-complete in org-mode buffer after pressing #+ chars."
+    (interactive)
+    (if (string-equal "#" (string (preceding-char)))
+      (progn
+        (insert "+")
+        (company-complete))
+      (insert "+")))
+
+  (eval-after-load 'org '(define-key org-mode-map
+                 (kbd "+") 'trigger-org-company-complete))
+#+end_src
 ** TODO Agenda
 
 ** Org-roam
@@ -499,3 +552,4 @@ Highlight defined lisp symbols (when in elisp mode).
 ** Python
 ** MATLAB
 ** Julia
+- [ ] test
