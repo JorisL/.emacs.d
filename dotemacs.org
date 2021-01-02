@@ -1,6 +1,12 @@
 #+TITLE: DotEmacs
 #+PROPERTY: header-args :results silent
 
+* Initializers
+Set debugger information.
+#+begin_src emacs-lisp
+  (setq debug-on-error t)
+  (setq debug-on-quit t)
+#+end_src
 * Helper functions / definitions
 These are some functions / defenitions used for this config.
 #+begin_src emacs-lisp
@@ -422,6 +428,27 @@ Use =company-mode= for autocompletion.
     :diminish company-mode)
 #+end_src
 
+** Better kill/yank
+Define to, when killing/yanking without selection, kill or yank the entire line.
+This is especially helpfull in god-mode to have vim-like short commands to kill or yank the current line.
+#+begin_src emacs-lisp
+  (defun slick-cut (beg end)
+    (interactive
+     (if mark-active
+         (list (region-beginning) (region-end))
+       (list (line-beginning-position) (line-beginning-position 2)))))
+
+  (advice-add 'kill-region :before #'slick-cut)
+
+  (defun slick-copy (beg end)
+    (interactive
+     (if mark-active
+         (list (region-beginning) (region-end))
+       (message "Copied line")
+       (list (line-beginning-position) (line-beginning-position 2)))))
+
+  (advice-add 'kill-ring-save :before #'slick-copy)
+#+end_src
 * STARTED Org mode
 ** Basic settings
 #+begin_src emacs-lisp
@@ -440,6 +467,20 @@ Use =company-mode= for autocompletion.
   (setq org-todo-keywords
         '((sequence "TODO" "STARTED" "WAITING" "|" "DONE" "CANCELLED")))
   (setq org-pretty-entities t)
+  (defvar org-capture-templates)
+  (setq org-capture-templates
+    '( ("t" "Todo" entry (file org-default-todo-file)
+        "* TODO %?\n%U" :empty-lines 1)
+       ("T" "Todo with Clipboard" entry (file org-default-todo-file)
+        "* TODO %?\n%U\n   %c" :empty-lines 1)
+       ("n" "Note" entry (file org-default-notes-file)
+        "* NOTE %?\n%U" :empty-lines 1)       
+       ("N" "Note with Clipboard" entry (file org-default-notes-file)
+        "* NOTE %?\n%U\n   %c" :empty-lines 1)
+       ("r" "Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
+        "* [[%^{link}][%^{description}]] \nCaptured On: %U%?")
+       ("R" "Protocol Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
+        "* [[%:link][%:description]] \nCaptured On: %U%?")))
 #+end_src
 
 Quick hack to get company autocomplete working with =#-= in org-mode
@@ -457,50 +498,50 @@ Quick hack to get company autocomplete working with =#-= in org-mode
                  (kbd "+") 'trigger-org-company-complete))
 #+end_src
 ** TODO Agenda
-
 ** Org-roam
 [[https://www.orgroam.com/][Org-roam]] is an org-mode based personal knowledge managing system.
 #+begin_src emacs-lisp
   (use-package org-roam
-        :ensure t
-        :hook
-        (after-init . org-roam-mode)
-        :custom
-        (org-roam-directory me/org-roam-directory)
-        :config
-        (setq org-roam-dailies-directory "daily/")
-        (setq org-roam-dailies-capture-templates
-              '(("d" "default" entry
-                 #'org-roam-capture--get-point
-                 "* %?"
-                 :file-name "daily/%<%Y-%m-%d>"
-                 :head "#+title: %<%Y-%m-%d>\n\n")))
-        :bind (:map org-roam-mode-map
-                    (("C-c n l" . org-roam)
-                     ("C-c n f" . org-roam-find-file)
-                     ("C-c n g" . org-roam-graph)
-                     ("C-c n t" . org-roam-dailies-find-today))
-                    :map org-mode-map
-                    (("C-c n i" . org-roam-insert))
-                    (("C-c n I" . org-roam-insert-immediate))))
+    :ensure t
+    :hook
+    (after-init . org-roam-mode)
+    :custom
+    (org-roam-directory me/org-roam-directory)
+    :config
+    (setq org-roam-dailies-directory "daily/")
+    (setq org-roam-dailies-capture-templates
+          '(("d" "default" entry
+             #'org-roam-capture--get-point
+             "* %?"
+             :file-name "daily/%<%Y-%m-%d>"
+             :head "#+title: %<%Y-%m-%d>\n\n")))
+    :bind (:map org-roam-mode-map
+                (("C-c n l" . org-roam)
+                 ("C-c n f" . org-roam-find-file)
+                 ("C-c n g" . org-roam-graph)
+                 ("C-c n t" . org-roam-dailies-find-today))
+                :map org-mode-map
+                (("C-c n i" . org-roam-insert))
+                (("C-c n I" . org-roam-insert-immediate))))
 #+end_src
 
-
-** TODO Capture templates
+Add completion for =org-roam= files in =company-mode=.
 #+begin_src emacs-lisp
-;  (defvar org-capture-templates
-;    '( ("t" "Todo" entry (file org-default-todo-file)
-;        "* TODO %?\n%U" :empty-lines 1)
-;       ("T" "Todo with Clipboard" entry (file org-default-todo-file)
-;        "* TODO %?\n%U\n   %c" :empty-lines 1)
-;       ("n" "Note" entry (file org-default-notes-file)
-;        "* NOTE %?\n%U" :empty-lines 1)       
-;       ("N" "Note with Clipboard" entry (file org-default-notes-file)
-;        "* NOTE %?\n%U\n   %c" :empty-lines 1)
-;       ("r" "Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
-;        "* [[%^{link}][%^{description}]] \nCaptured On: %U%?")
-;       ("R" "Protocol Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
-;        "* [[%:link][%:description]] \nCaptured On: %U%?")))
+  (use-package company-org-roam
+    :ensure t
+    ;; You may want to pin in case the version from stable.melpa.org is not working 
+    ; :pin melpa
+    :config
+    (push 'company-org-roam company-backends))
+#+end_src
+** Images
+Use =org-download= to easily place images in org-mode.
+#+begin_src emacs-lisp
+  (use-package org-download
+    :ensure t
+    :after org
+    :init
+    (setq org-image-actual-width nil))
 #+end_src
 
 * TODO Magit
@@ -553,3 +594,9 @@ Highlight defined lisp symbols (when in elisp mode).
 ** MATLAB
 ** Julia
 - [ ] test
+* Finalizers
+Reset debugger information
+#+begin_src emacs-lisp
+  (setq debug-on-error nil)
+  (setq debug-on-quit nil)
+#+end_src
