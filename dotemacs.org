@@ -456,7 +456,6 @@ This is especially helpfull in god-mode to have vim-like short commands to kill 
   (setq org-startup-indented 'f)
   (setq org-special-ctrl-a/e 't)
   (setq org-default-notes-file (concat org-directory "/notes.org"))
-  (defvar org-default-todo-file (concat org-directory "/todo.org"))
   (defvar org-default-read-it-later-file (concat org-directory "/read_it_later.org"))
   (define-key global-map "\C-cc" 'org-capture)
   (global-set-key "\C-cl" 'org-store-link)
@@ -469,18 +468,18 @@ This is especially helpfull in god-mode to have vim-like short commands to kill 
   (setq org-pretty-entities t)
   (defvar org-capture-templates)
   (setq org-capture-templates
-    '( ("t" "Todo" entry (file org-default-todo-file)
-        "* TODO %?\n%U" :empty-lines 1)
-       ("T" "Todo with Clipboard" entry (file org-default-todo-file)
-        "* TODO %?\n%U\n   %c" :empty-lines 1)
-       ("n" "Note" entry (file org-default-notes-file)
-        "* NOTE %?\n%U" :empty-lines 1)       
-       ("N" "Note with Clipboard" entry (file org-default-notes-file)
-        "* NOTE %?\n%U\n   %c" :empty-lines 1)
-       ("r" "Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
-        "* [[%^{link}][%^{description}]] \nCaptured On: %U%?")
-       ("R" "Protocol Read-it-later" entry (file+headline org-default-read-it-later-file "Unread")
-        "* [[%:link][%:description]] \nCaptured On: %U%?")))
+        '(
+          ("t" "Todo" entry (file+headline org-default-notes-file "Inbox")
+           "* TODO %?\n%U" :empty-lines 1)
+          ("T" "Todo with Clipboard" entry (file+headline org-default-notes-file "Inbox")
+           "* TODO %?\n%U\n   %c" :empty-lines 1)
+          ("n" "Note" entry (file+headline org-default-notes-file "Inbox")
+           "* NOTE %?\n%U" :empty-lines 1)       
+          ("N" "Note with Clipboard" entry (file+headline org-default-notes-file "Inbox")
+           "* NOTE %?\n%U\n   %c" :empty-lines 1)
+          ("b" "Bookmark URL" entry (file+olp org-default-notes-file "Bookmarks" "Unread")
+           "* %(my-org-get-link-from-url) :bookmark:\n:PROPERTIES:\n:CREATED: %U\n:END:\n%?\n" :empty-lines 1)
+          ))
 #+end_src
 
 Quick hack to get company autocomplete working with =#-= in org-mode
@@ -498,42 +497,6 @@ Quick hack to get company autocomplete working with =#-= in org-mode
                  (kbd "+") 'trigger-org-company-complete))
 #+end_src
 ** TODO Agenda
-** Org-roam
-[[https://www.orgroam.com/][Org-roam]] is an org-mode based personal knowledge managing system.
-#+begin_src emacs-lisp
-  (use-package org-roam
-    :ensure t
-    :hook
-    (after-init . org-roam-mode)
-    :custom
-    (org-roam-directory me/org-roam-directory)
-    :config
-    (setq org-roam-dailies-directory "daily/")
-    (setq org-roam-dailies-capture-templates
-          '(("d" "default" entry
-             #'org-roam-capture--get-point
-             "* %?"
-             :file-name "daily/%<%Y-%m-%d>"
-             :head "#+title: %<%Y-%m-%d>\n\n")))
-    :bind (:map org-roam-mode-map
-                (("C-c n l" . org-roam)
-                 ("C-c n f" . org-roam-find-file)
-                 ("C-c n g" . org-roam-graph)
-                 ("C-c n t" . org-roam-dailies-find-today))
-                :map org-mode-map
-                (("C-c n i" . org-roam-insert))
-                (("C-c n I" . org-roam-insert-immediate))))
-#+end_src
-
-Add completion for =org-roam= files in =company-mode=.
-#+begin_src emacs-lisp
-  (use-package company-org-roam
-    :ensure t
-    ;; You may want to pin in case the version from stable.melpa.org is not working 
-    ; :pin melpa
-    :config
-    (push 'company-org-roam company-backends))
-#+end_src
 ** Images
 Use =org-download= to easily place images in org-mode.
 #+begin_src emacs-lisp
@@ -544,7 +507,40 @@ Use =org-download= to easily place images in org-mode.
     (setq org-image-actual-width nil))
 #+end_src
 
-* TODO Magit
+** Links
+Define function =my-org-insert-link= to insert org-mode url's with the title of the web page as link description.
+Taken from [[https://orgmode.org/worg/org-hacks.html#sec-1-6-3][Org ad hoc code, quick hacks and workarounds]] (Insert link with HTML title as default description).
+=my-org-get-link-from-url= is a simiar function, but instead of inserting the formatted org-link it only returns it.
+This is used for the bookmark capture template.
+#+begin_src emacs-lisp
+  (require 'mm-url) ; to include mm-url-decode-entities-string
+
+  (defun my-org-insert-link ()
+    "Insert org link where default description is set to html title."
+    (interactive)
+    (let* ((url (read-string "URL: "))
+       (title (my-get-html-title-from-url url)))
+      (org-insert-link nil url title)))
+
+  (defun my-get-html-title-from-url (url)
+    "Return content in <title> tag."
+    (let (x1 x2 (download-buffer (url-retrieve-synchronously url)))
+      (with-current-buffer download-buffer
+    (goto-char (point-min))
+    (setq x1 (search-forward "<title>"))
+    (search-forward "</title>")
+    (setq x2 (search-backward "<"))
+    (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)))))
+
+  (defun my-org-get-link-from-url ()
+    "Return org-mode link where default description is set to html title."
+    (interactive)
+      (let* ((url (read-string "URL: "))
+       (title (my-get-html-title-from-url url)))
+      (concat "[[" url "][" title "]]")))
+#+end_src
+
+* Todo Magit
 * TODO Programming
 ** Generic
 *** Auto completion
@@ -600,3 +596,4 @@ Reset debugger information
   (setq debug-on-error nil)
   (setq debug-on-quit nil)
 #+end_src
+
