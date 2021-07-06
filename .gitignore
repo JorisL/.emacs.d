@@ -1,21 +1,14 @@
-# Everything
+# Ignore everything
 *
-# Except
+
+# But not these files...
+!.gitignore
+!README.org
 !init.el
 !dotemacs.org
-!README.org
-
-# Compiled
-*.elc
-
-# Packaging
-.cask
-
-# Backup files
-*~
-
-# Undo-tree save-files
-*.~undo-tree
-
-# Secrets file
-.secrets.el
+!/my_el/
+!/my_el/*
+!/my_scripts/
+!/my_scripts/*
+!/templates/
+!/templates/*

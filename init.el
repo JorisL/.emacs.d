@@ -15,6 +15,7 @@
    load-prefer-newer t
    package-enable-at-startup nil)
   (add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/") t)
+  (add-to-list 'package-archives '("org" . "https://orgmode.org/elpa/") t)
   (package-initialize)
 
   ;; Install `use-package' dependency by hand
@@ -38,13 +39,12 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(package-selected-packages '(iedit use-package)))
+ '(package-selected-packages '(csharp-mode julia-mode iedit use-package)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(default ((t (:font "Monaco" :height 120))))
  '(doom-modeline-bar ((t (:background unspecified))))
  '(flycheck-error ((((class color) (min-colors 257)) (:underline (:color "#BF616A" :style line))) (((class color) (min-colors 256)) (:underline (:color "#ff6655" :style line))) (((class color) (min-colors 16)) (:underline (:color "red" :style line)))))
  '(flycheck-info ((((class color) (min-colors 257)) (:underline (:color "#81A1C1" :style line))) (((class color) (min-colors 256)) (:underline (:color "#51afef" :style line))) (((class color) (min-colors 16)) (:underline (:color "brightblue" :style line)))))
@@ -56,3 +56,4 @@
  '(swiper-line-face ((t (:extend t))))
  '(vertical-border ((t (:background unspecified :inverse-video t))))
  '(which-key-command-description-face ((t (:foreground unspecified)))))
+(put 'narrow-to-region 'disabled nil)

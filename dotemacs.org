@@ -5,6 +5,7 @@
 Set debugger information.
 #+begin_src emacs-lisp
   (setq debug-on-error t)
+  (setq byte-compile-debug t)
   (setq debug-on-quit t)
 #+end_src
 * Helper functions / definitions
@@ -25,6 +26,19 @@ Unix tools look for HOME, but this is normally not defined on Windows.
 #+end_src
 
 * Generic Emacs settings
+** Server
+#+begin_src emacs-lisp
+  (require 'server)
+  (unless (server-running-p)
+    (cond
+     ((eq system-type 'windows-nt)
+      (setq server-auth-dir "~\\.emacs.d\\server\\"))
+     ((eq system-type 'gnu/linux)
+      (setq server-auth-dir "~/.emacs.d/server/")))
+    (setq server-name "emacs-server-file")
+    (server-start))
+#+end_src
+
 ** Optimizations
 Note: most of these optimizations are taken from [[https://github.com/hlissner/doom-emacs/][doom emacs]] (core.el).
 
@@ -147,6 +161,7 @@ Here are some better default settings
   (put 'downcase-region 'disabled nil)    ; Enable downcase-region
   (put 'upcase-region 'disabled nil)      ; Enable upcase-region
   (global-auto-revert-mode t)             ; Auto reload files from disk
+  (setq tab-always-indent 'complete)      ; When pressin <Tab> first try to indent; complete if already indented
 #+END_SRC
 
 Use =.emacscache/= to contain local data. This is to avoid littering in the Emacs
@@ -239,20 +254,20 @@ The variables over here are default values for when they aren't defined in =.sec
 Use the ~(setq variable value)~ syntax in that file, since the variable is already initialized over here.
 
 #+BEGIN_SRC emacs-lisp
-(defvar me/erc-nick           nil       "The ERC nick to use.")
-(defvar me/erc-password       nil       "The ERC password to use.")
-(defvar me/erc-port           nil       "The ERC port to use.")
-(defvar me/erc-server         nil       "The ERC server to use.")
-(defvar me/font-family        "Monaco"  "The font to use.")
-(defvar me/font-size-default  120       "The font size to use for default text.")
-(defvar me/font-size-large    1.2       "The font size to use for larger text.")
-(defvar me/font-size-small    .8        "The font size to use for smaller text.")
+  (defvar me/erc-nick           nil       "The ERC nick to use.")
+  (defvar me/erc-password       nil       "The ERC password to use.")
+  (defvar me/erc-port           nil       "The ERC port to use.")
+  (defvar me/erc-server         nil       "The ERC server to use.")
+  (defvar me/font-family        "Monaco"  "The font to use.")
+  (defvar me/font-size-default  120       "The font size to use for default text.")
+  (defvar me/font-size-large    1.2       "The font size to use for larger text.")
+  (defvar me/font-size-small    .8        "The font size to use for smaller text.")
 
-(setq org-directory "~/org")
-(defvar me/org-roam-directory "~/org/roam")
+  (setq org-directory "~/org")
+  (defvar me/org-roam-directory "~/org/roam")
 
-(let ((secrets.el (expand-file-name ".secrets.el")))
-  (load secrets.el t))
+  (let ((secrets.el (expand-file-name ".secrets.el")))
+    (load secrets.el t))
 #+END_SRC
 
 ** Theme
@@ -266,7 +281,7 @@ Configure [[https://github.com/hlissner/emacs-doom-themes][Doom-Nord]] color the
     (doom-themes-org-config)
     (doom-themes-visual-bell-config)
     (doom-themes-set-faces nil
-      '(default :font me/font-family :height me/font-size-default)
+;      '(default :font me/font-family :height me/font-size-default)
       '(doom-modeline-bar :background 'unspecified)
       '(flycheck-error :underline `(:color ,error :style line))
       '(flycheck-info :underline `(:color ,highlight :style line))
@@ -313,34 +328,68 @@ This is especially usefull with god-mode
 #+begin_src emacs-lisp
   (global-set-key (kbd "C-;") 'comment-line)
 #+end_src
+
+Map =apply-macro-to-region-lines= to =<f5>= (key is normally unmapped,
+and is right next to =<f3>= and =<f4>= which are already used for recording/replaying macro's)
+#+begin_src emacs-lisp
+  (global-set-key (kbd "<f5>") 'apply-macro-to-region-lines)
+#+end_src
+
+Define function to duplicate an entire line, and map it to =<C-d>=.
+This is normally bound to =delete-char= (delete key).
+After this has been defined, the =delete-char= has to be bound back to the =<delete>= key
+(otherwise delete will also run this new duplicate function). 
+#+begin_src emacs-lisp
+  (defun duplicate-line()
+    (interactive)
+    (move-beginning-of-line 1)
+    (kill-line)
+    (yank)
+    (open-line 1)
+    (next-line 1)
+    (yank)
+  )
+  (global-set-key (kbd "C-d") 'duplicate-line)
+  (global-set-key (kbd "<delete>") 'delete-char)
+#+end_src
+
 ** Command completion
-=ivy= is a command completion framework, which replaces the normal command completion dialogs.
-#+BEGIN_SRC emacs-lisp
-  (use-package ivy
-    :ensure t
-    :config
-    (ivy-mode t))
-#+END_SRC
+Use =vertico= as lightweight command completion tool (shown when using =C-x C-f=, =C-x b=, etc.).
+=Savehist= is used to show the listed items based on historical usage.
+=Marginalia= shows additional info on the right of the minibuffer (example: in file select mode it shows the size, modification date, etc.).
 
-By default =ivy= starts filters with =^= (e.g. must match at the beginning).
-Change it to not do this, since I often search for a file/command without knowing the exact name at the start (and I'm tired of backspacing the =^= each time).
-#+BEGIN_SRC emacs-lisp
-  (setq ivy-initial-inputs-alist nil)
-#+END_SRC
-
-=counsel= is a collection of =ivy= enhanced versions of normal Emacs commands.
-#+BEGIN_SRC emacs-lisp
-  (use-package counsel
+#+begin_src emacs-lisp
+  (use-package vertico
     :ensure t
-    :bind (("M-x" . counsel-M-x)))
-#+END_SRC
+    :bind (:map vertico-map
+           ("C-j" . vertico-next)
+           ("C-k" . vertico-previous)
+           ("C-f" . vertico-exit)
+           :map minibuffer-local-map
+           ("M-h" . backward-kill-word))
+    :custom
+    (vertico-cycle t)
+    :init
+    (vertico-mode))
 
-=swiper= is an =ivy= enhanched version of isearch.
-#+BEGIN_SRC emacs-lisp
-  (use-package swiper
+  (use-package savehist
+    :init
+    (savehist-mode))
+
+  (use-package marginalia
+    :after vertico
     :ensure t
-    :bind (("M-s" . counsel-grep-or-swiper)))
-#+END_SRC
+    :custom
+    (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
+    :init
+    (marginalia-mode))
+#+end_src
+
+Configure some build-in emacs settings to have better minibuffer completion, which is therefore also used by =vertico=). E.g. fuzzy matching, regex, etc.. 
+#+begin_src emacs-lisp
+  (setq completion-styles '(initials partial-completion flex)) ; > Emacs 27.1
+  (setq completion-cycle-threshold 10)
+#+end_src
 
 ** Suggest next key
 =which-key= suggests possible keys when pressing a key combination.
@@ -391,11 +440,11 @@ TODO: explenation
 #+END_SRC
 
 ** Modeline
-Use =doom-modeline= to get a cleaner and more usable modeline
+Use =mood-line= package for a lightweight modline config.
 #+begin_src emacs-lisp
-  (use-package doom-modeline
-    :ensure t
-    :init (doom-modeline-mode 1))
+  (use-package mood-line
+    :config  
+    (mood-line-mode))
 #+end_src
 
 Also show the battery level (helpfull with MacOS when Emacs is in full screen)
@@ -426,6 +475,11 @@ Use =company-mode= for autocompletion.
             company-show-numbers t)
       (defvar company-dabbrev-downcase nil))
     :diminish company-mode)
+
+(with-eval-after-load 'company
+  (define-key company-active-map (kbd "<return>") nil)
+  (define-key company-active-map (kbd "RET") nil)
+  (define-key company-active-map (kbd "C-SPC") #'company-complete-selection))
 #+end_src
 
 ** Better kill/yank
@@ -449,10 +503,143 @@ This is especially helpfull in god-mode to have vim-like short commands to kill 
 
   (advice-add 'kill-ring-save :before #'slick-copy)
 #+end_src
+
+** DWIM (Do What I Mean)
+In recent versions a "Do What I Mean" version was created for several commands.
+With these commands, for example to convert to uppercase, the DWIM version will act on
+the region if a region is selected, and on an appropriate semantic unit otherwise.
+#+begin_src emacs-lisp
+  (global-set-key (kbd "M-u") 'upcase-dwim)
+  (global-set-key (kbd "M-l") 'downcase-dwim)
+  (global-set-key (kbd "M-c") 'capitalize-dwim)
+#+end_src
+
+Also include comment-dwim-2 for some additional improvements (e.g. run multiple times
+to switch between commenting the line and adding a comment after the line.
+#+begin_src emacs-lisp
+  (use-package comment-dwim-2
+    :disabled t
+    :ensure t
+    :config
+    (progn
+      (global-set-key (kbd "M-;") 'comment-dwim-2)
+      (define-key org-mode-map (kbd "M-;") 'org-comment-dwim-2)))
+#+end_src
+** Scratch buffer
+Use org-mode as default mode for scratch buffer:
+#+begin_src emacs-lisp
+  (setq initial-major-mode 'org-mode)
+#+end_src
+
+Make scratch buffer persistent over emacs sessions:
+#+begin_src emacs-lisp
+  (defun save-persistent-scratch ()
+    "Save the contents of *scratch*"
+    (with-current-buffer (get-buffer-create "*scratch*")
+      (write-region (point-min) (point-max)
+                    (concat user-emacs-directory "scratch"))))
+
+  (defun load-persistent-scratch ()
+    "Reload the scratch buffer"
+    (let ((scratch-file (concat user-emacs-directory "scratch")))
+      (if (file-exists-p scratch-file)
+          (with-current-buffer (get-buffer "*scratch*")
+            (delete-region (point-min) (point-max))
+            (insert-file-contents scratch-file)))))
+
+  (add-hook 'emacs-startup-hook 'load-persistent-scratch)
+  (add-hook 'kill-emacs-hook 'save-persistent-scratch)
+
+  (run-with-idle-timer 300 t 'save-persistent-scratch)
+#+end_src
+
+Protect scratch buffer such that it can't accidentally be killed:
+#+begin_src emacs-lisp
+  (with-current-buffer "*scratch*"
+    (emacs-lock-mode 'kill))
+#+end_src
+** Recent files
+Setup emacs to use =C-x C-r= to show a list of recent files,
+instead of opening a file as read-only.
+#+begin_src emacs-lisp
+  (recentf-mode 1)
+  (setq recentf-max-menu-items 25)
+  (setq recentf-max-saved-items 25)
+  (global-set-key "\C-x\ \C-r" 'recentf-open-files)
+#+end_src
+
+** Line numbers
+Normally the indentation/width of the left-side fringe with line numbers is dependent on the width of the line-number itself.
+This is quite annoying in long, folded, files (e.g. org-files),
+since this change in indentation makes it more difficult to compare indentation of things as headers.
+This snippet will change the width of the fringe for all lines to the width of the last line,
+such that the fringe is always indented equal across all lines.
+#+begin_src emacs-lisp
+  (defun display-line-numbers-equalize ()
+    "Equalize The width"
+    (setq display-line-numbers-width (length (number-to-string (line-number-at-pos (point-max))))))
+  (add-hook 'find-file-hook 'display-line-numbers-equalize)
+#+end_src
+
+** File templates
+Use build-in =auto-insert= package to automatically insert a filetype specific template when creating a new file.
+#+begin_src emacs-lisp
+  (use-package autoinsert
+    :ensure t
+    :init
+    ;; Don't want to be prompted before insertion:
+    (setq auto-insert-query nil)
+
+    (setq auto-insert-directory (locate-user-emacs-file "templates"))
+
+    (defun auto-insert-guard ()
+      "Prevent auto-insertion for files that exist already"
+      (interactive)
+      (unless (file-exists-p (buffer-file-name))
+        (auto-insert)))
+    (add-hook 'find-file-hook 'auto-insert-guard)
+
+    (auto-insert-mode 1)
+    :config
+    (defcustom auto-insert-init-form 'auto-insert-init-form
+      "Symbol identifying init forms in template files."
+      :group 'auto-insert
+      :type 'symbol)
+
+    (defun my-eval-auto-insert-init-form ()
+      "Evaluate (AUTO-INSERT-INIT-FORM ...) in autoinsert templates.
+    Thereby, AUTO-INSERT-INIT-FORM stands for the symbol defined by
+    the customizable variable `auto-insert-init-form'.
+    \(auto-insert-init-form ...) works like `progn'.
+    Applied in the newly created file it should return the string
+    that replaces the form."
+      (goto-char (point-min))
+      (cl-letf (((symbol-function auto-insert-init-form) #'progn))
+        (while (re-search-forward "(auto-insert-init-form[[:space:]]" nil t)
+          (let* ((beg (goto-char (match-beginning 0)))
+                 (end (with-syntax-table emacs-lisp-mode-syntax-table
+                        (forward-sexp)
+                        (point)))
+                 (str (eval (read (buffer-substring beg end)))))
+            (delete-region beg end)
+            (insert str)))))
+
+    (define-auto-insert
+      "\\.org?$"
+      ["default-org.org"
+       my-eval-auto-insert-init-form]))
+#+end_src
+
 * STARTED Org mode
 ** Basic settings
 #+begin_src emacs-lisp
+  ;(use-package 'org-plus-contrib
+  ;  :ensure t)
+#+end_src
+
+#+begin_src emacs-lisp
   (require 'org-tempo)
+  (setq org-startup-folded t)
   (setq org-startup-indented 'f)
   (setq org-special-ctrl-a/e 't)
   (setq org-default-notes-file (concat org-directory "/notes.org"))
@@ -461,8 +648,9 @@ This is especially helpfull in god-mode to have vim-like short commands to kill 
   (global-set-key "\C-cl" 'org-store-link)
   (global-set-key "\C-ca" 'org-agenda)
   (setq org-src-fontify-natively 't)
-  ;(setq org-src-tab-acts-natively t)
+  (setq org-src-tab-acts-natively 't)
   (setq org-src-window-setup 'current-window)
+  (setq org-hide-emphasis-markers 't)
   (setq org-todo-keywords
         '((sequence "TODO" "STARTED" "WAITING" "|" "DONE" "CANCELLED")))
   (setq org-pretty-entities t)
@@ -470,16 +658,17 @@ This is especially helpfull in god-mode to have vim-like short commands to kill 
   (setq org-capture-templates
         '(
           ("t" "Todo" entry (file+headline org-default-notes-file "Inbox")
-           "* TODO %?\n%U" :empty-lines 1)
-          ("T" "Todo with Clipboard" entry (file+headline org-default-notes-file "Inbox")
-           "* TODO %?\n%U\n   %c" :empty-lines 1)
+           "* TODO %^{TASK} %^g\n%^{DEADLINE}p%U\n%?" :empty-lines 1)
           ("n" "Note" entry (file+headline org-default-notes-file "Inbox")
            "* NOTE %?\n%U" :empty-lines 1)       
-          ("N" "Note with Clipboard" entry (file+headline org-default-notes-file "Inbox")
-           "* NOTE %?\n%U\n   %c" :empty-lines 1)
           ("b" "Bookmark URL" entry (file+olp org-default-notes-file "Bookmarks" "Unread")
-           "* %(my-org-get-link-from-url) :bookmark:\n:PROPERTIES:\n:CREATED: %U\n:END:\n%?\n" :empty-lines 1)
+           "* %(my-org-get-link-from-url) :bookmark:\n:PROPERTIES:\n:CREATED: %U\n:END:\n" :empty-lines 1)
           ))
+#+end_src
+
+Automatically open default notes file when starting emacs
+#+begin_src emacs-lisp
+  (setq initial-buffer-choice  org-default-notes-file)
 #+end_src
 
 Quick hack to get company autocomplete working with =#-= in org-mode
@@ -496,7 +685,22 @@ Quick hack to get company autocomplete working with =#-= in org-mode
   (eval-after-load 'org '(define-key org-mode-map
                  (kbd "+") 'trigger-org-company-complete))
 #+end_src
-** TODO Agenda
+
+Configure org-refile (=C-x C-w=) for allowing to refile in subheaders
+#+begin_src emacs-lisp
+  (setq org-refile-use-outline-path 'file)
+  (setq org-outline-path-complete-in-steps nil)
+  (setq org-refile-allow-creating-parent-nodes 'confirm)
+  (setq org-refile-targets ( quote (("notes.org" :maxlevel . 9))))
+#+end_src
+
+** Agenda
+#+begin_src emacs-lisp
+  (setq org-agenda-window-setup 'current-window)
+  (setq org-agenda-start-day "-1d")
+  (setq org-agenda-span 10)
+  (setq org-agenda-start-on-weekday nil)
+#+end_src
 ** Images
 Use =org-download= to easily place images in org-mode.
 #+begin_src emacs-lisp
@@ -540,7 +744,79 @@ This is used for the bookmark capture template.
       (concat "[[" url "][" title "]]")))
 #+end_src
 
-* Todo Magit
+Define custom "browse-url" hyperlink type to practically open a file/folder in the default OS application.
+Example; a link to a =.docx= file now opens in office instead of in Emacs as an archive.
+#+begin_src emacs-lisp
+  (load "~/.emacs.d/my_el/ol-browse-url.el")
+  (require 'ol-browse-url)
+#+end_src
+
+** Babel
+Generic org-babel settings
+#+begin_src emacs-lisp
+    (org-babel-do-load-languages
+       'org-babel-load-languages
+       '(
+         (python . t)
+         (C      . t)
+         (matlab . t)
+         (plantuml . t)
+         (emacs-lisp . t)
+         (eshell . t)
+         (calc . t)))
+
+  (add-hook 'org-babel-after-execute-hook 'org-redisplay-inline-images)
+#+end_src
+** Export
+Add aditional export backends
+#+begin_src emacs-lisp
+  (require 'ox-taskjuggler)
+  (require 'ox-s5)
+#+end_src
+
+Setup odt/docx export
+#+begin_src emacs-lisp
+  ;; When I tell Org-Mode to export to ODT at my day job, I actually want DOCX.
+  (setq org-odt-preferred-output-format "docx")
+
+  ;; According to Chen Bin (http://blog.binchen.org/posts/how-to-take-screen-shot-for-business-people-efficiently-in-emacs.html),
+  ;; the above should be sufficient on Linux, but he needed more setup on OSX. Let's see if I can adapt his code to Windows.
+  (defun config-org-export-as-docx-via-odt ()
+    (interactive)
+    (let ((cmd "C:/Program Files/LibreOffice/program/soffice.exe"))
+      (when (and (eq system-type 'windows-nt) (file-exists-p cmd))
+        ;; org v7
+        (setq org-export-odt-convert-processes '(("LibreOffice" "\"C:\\Program Files\\LibreOffice\\program\\soffice.exe\" --headless --convert-to %f%x --outdir %d %i")))
+        ;; org v8/v9
+        (setq org-odt-convert-processes '(("LibreOffice" "\"C:\\Program Files\\LibreOffice\\program\\soffice.exe\" --headless --convert-to %f%x --outdir %d %i"))))
+      ))
+
+  ;; Run the function I just defined to set up org-export-as-docx-via-odt.
+  (config-org-export-as-docx-via-odt)
+#+end_src
+
+Embed images in HTML export instead of linking; this way the files can easily be shared
+#+begin_src emacs-lisp
+  (defun org-html--format-image (source attributes info)
+    (format "<img src=\"data:image/%s;base64,%s\"%s />"
+            (or (file-name-extension source) "")
+            (base64-encode-string
+             (with-temp-buffer
+               (insert-file-contents-literally source)
+               (buffer-string)))
+            (file-name-nondirectory source)))
+#+end_src
+** Attachments
+#+begin_src emacs-lisp
+  (setq org-attach-use-inheritance 't)
+#+end_src
+
+* Magit
+#+begin_src emacs-lisp
+  (use-package magit
+    :ensure t
+    :bind (("C-x g" . 'magit-status)))
+#+end_src
 * TODO Programming
 ** Generic
 *** Auto completion
@@ -587,13 +863,212 @@ Highlight defined lisp symbols (when in elisp mode).
 #+end_src
 
 ** Python
-** MATLAB
+** TODO MATLAB
+*** TODO Matlab REPL
+Matlab doesn't provide a terminal/cmdline REPL in windows :(.
+Therefore I've botched together a [[file:my_scripts/matlab_engine_repl.py][custom Matlab REPL]] in Python, with use of the Matlab-engine library from Mathworks.
+Furthermore; I've used the Emacs comint (command-line interface) library to write a major mode for this REPL,
+similar as to the elisp or python REPL's included in Emacs.
+This Emacs REPL interface also includes support for MATLAB syntax highlighting.
+
+Remark; the custom Matlab REPL doesn't support multi-line commands (yet?).
+
+TODO:
+- [X] run script in current MATLAB directory, instead of in tmp folder
+- [X] find out way to change directory?
+- [ ] multiline commands
+  - comint-input-filter-functions
+
+Comint code based on [[https://www.masteringemacs.org/article/comint-writing-command-interpreter][this masteringemacs article]].
+
+#+begin_src emacs-lisp
+  (defvar matlab-engine-repl-python-cli-interpreter "ipython"
+    "Python interpreter used by `run-matlab-engine-repl'")
+
+  (defvar matlab-engine-repl-script-path (expand-file-name "my_scripts/matlab_engine_repl.py")
+    "Path to the python script used by `run-matlab-engine-repl'")
+
+  (defvar matlab-engine-repl-python-cli-arguments `(,(subst-char-in-string ?/ ?\\ matlab-engine-repl-script-path) "")
+    "Commandline arguments to pass to `matlab-engine-repl-cli'")
+                                          ; remark: convert POSIX path of repl-script to windows backslashes
+
+  (defvar matlab-engine-repl-mode-map
+    (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
+      ;; example definition
+      (define-key map "\t" 'completion-at-point)
+      map)
+    "Basic mode map for `run-matlab-engine-repl'")
+
+  (defvar matlab-engine-repl-prompt-regexp "^>> "
+    "Prompt for `run-matlab-engine-repl'.")
+
+  (defun matlab-engine-repl ()
+    "Run an inferior instance of `matlab-engine-repl-cli' inside Emacs."
+    (interactive)
+    (let* ((buffer (comint-check-proc "Matlab-engine REPL")))
+      ;; pop to the "*Matlab-Engine-Repl*" buffer if the process is dead, the
+      ;; buffer is missing or it's got the wrong mode.
+      (pop-to-buffer-same-window
+       (if (or buffer (not (derived-mode-p 'matlab-engine-repl-mode))
+               (comint-check-proc (current-buffer)))
+           (get-buffer-create (or buffer "*Matlab-engine REPL*"))
+         (current-buffer)))
+      ;; create the comint process if there is no buffer.
+      (unless buffer
+        (apply 'make-comint-in-buffer "Matlab-engine REPL" buffer
+               matlab-engine-repl-python-cli-interpreter nil matlab-engine-repl-python-cli-arguments)
+        (matlab-engine-repl-mode))))
+
+  (defun matlab-engine-repl--initialize ()
+    "Helper function to initialize Matlab-Engine-Repl"
+    (setq comint-process-echoes t)
+    (setq comint-use-prompt-regexp t))
+
+  (define-derived-mode matlab-engine-repl-mode comint-mode "Matlab-engine REPL"
+    "Major mode for `run-matlab-engine-repl'."
+    :syntax-table matlab-mode-syntax-table
+    nil "Matlab-engine REPL"
+    ;; this sets up the prompt so it matches the repl prompt (e.g. ">> ")
+    (setq comint-prompt-regexp matlab-engine-repl-prompt-regexp)
+    ;; this makes it read only; a contentious subject as some prefer the
+    ;; buffer to be overwritable.
+    (setq comint-prompt-read-only t)
+    ;; this makes it so commands like M-{ and M-} work.
+    ;(set (make-local-variable 'paragraph-separate) ">> ")
+    (set (make-local-variable 'font-lock-defaults) '(matlab-font-lock-keywords t))
+    (set (make-local-variable 'paragraph-start) matlab-engine-repl-prompt-regexp))
+
+  ;; this has to be done in a hook. grumble grumble.
+  (add-hook 'matlab-engine-repl-mode-hook 'matlab-engine-repl--initialize)
+#+end_src
+
 ** Julia
-- [ ] test
+#+begin_src emacs-lisp
+  (use-package julia-mode)
+#+end_src
+
+* Other
+** Calc
+Emacs calc can work with units, and also simplify them (math-convert-units).
+However; this function is not defined for use in inline math (as is the case for the unit simplification function usimplify()).
+Define our own inline math function which calls math-convert-units such that we can also convert units using inline math.
+This is especially helpfull when, for example, performing embedded calc calculations in an org mode document.
+#+begin_src emacs-lisp
+  (defmath uconvert (v u)
+    "Convert value V to compatible unit U."
+    (math-convert-units v u))
+#+end_src
+
+Define both an inline math and interactive user function to perform the "parallel" calculation (1/(1/x)+(1/y)+(1/...)).
+The interactive function is bound to z-p within calc-mode.
+#+begin_src emacs-lisp
+  (defun calcFunc-parallel (v)
+    "Calculate parallel value of the elements in vector v (as if each element is a resistance, capacitance, etc.)."
+    (math-simplify-units (math-div 1
+                                   (calcFunc-vsum(math-map-vec (lambda (x) (math-div 1 x)) v)))))
+
+  (put 'calc-define 'calc-User-parallel '(progn
+   (defun calc-User-parallel (arg) (interactive "P")
+    (calcFunc-parallel arg)
+   (put 'calc-User-parallel 'calc-user-defn 't)
+   (define-key calc-mode-map "zp" 'calc-User-parallel)
+  )))
+
+#+end_src
+
+** Tools
+*** Excel remove sheet protection
+I've written a small emacs function which removes the sheet-protection of an MS Excel file.
+#+begin_src emacs-lisp
+  (load "~/.emacs.d/my_el/excel-remove-sheet-protection.el")
+#+end_src
+** Search / replace
+Bride the functionalities from =re-builder= and =*-replace-regexp= such that regular expressions can be made using =re-builder= and directly used as input for =*-replace-regexp=.
+See [[https://karthinks.com/software/bridging-islands-in-emacs-1/]] for additional reference.
+
+Very briefly, the code works as follows:
+- Save the region and point positions into my/re-builder-positions before invoking re-builder, since these are lost.
+  This is done by advising the function.
+- When you press RET, quit re-builder and call qrr with the built regexp, saved point and region information.
+
+Lastly, if you want to insert a newline in the regexp-builder buffer you can now use C-q C-j.
+Entering literal newlines in a regexp definition is rare enough that dedicating RET to the much more useful qrr is a no-brainer.
+
+#+begin_src emacs-lisp
+  (require 're-builder)
+  (setq reb-re-syntax 'string)
+
+  (defvar my/re-builder-positions nil
+    "Store point and region bounds before calling re-builder")
+
+  (advice-add 're-builder
+              :before
+              (defun my/re-builder-save-state (&rest _)
+                "Save into `my/re-builder-positions' the point and region positions before calling `re-builder'."
+                (setq my/re-builder-positions
+                      (cons (point)
+                            (when (region-active-p)
+                              (list (region-beginning)
+                                    (region-end)))))))
+
+  (defun reb-replace-regexp (&optional delimited)
+    "Run `query-replace-regexp' with the contents of re-builder. With
+  non-nil optional argument DELIMITED, only replace matches
+  surrounded by word boundaries."
+    (interactive "P")
+    (reb-update-regexp)
+    (let* ((re (reb-target-binding reb-regexp))
+           (replacement (query-replace-read-to
+                         re
+                         (concat "Query replace"
+                                 (if current-prefix-arg
+                                     (if (eq current-prefix-arg '-) " backward" " word")
+                                   "")
+                                 " regexp"
+                                 (if (with-selected-window reb-target-window
+                                       (region-active-p)) " in region" ""))
+                         t))
+           (pnt (car my/re-builder-positions))
+           (beg (cadr my/re-builder-positions))
+           (end (caddr my/re-builder-positions)))
+      (with-selected-window reb-target-window
+        (goto-char pnt) ; replace with (goto-char (match-beginning 0)) if you want
+                        ; to control where in the buffer the replacement starts
+                        ; with re-builder
+        (setq my/re-builder-positions nil)
+        (reb-quit)
+        (query-replace-regexp re replacement delimited beg end))))
+
+  (define-key reb-mode-map (kbd "RET") #'reb-replace-regexp)
+  (define-key reb-lisp-mode-map (kbd "RET") #'reb-replace-regexp)
+  (global-set-key (kbd "C-M-%") #'re-builder)
+#+end_src
+** Ereader
+Use ereader package for Emacs to be able to open ebooks.
+#+begin_src emacs-lisp
+  (use-package ereader
+    :ensure t)
+#+end_src
+
+** Fast reading
+[[https://github.com/emacsmirror/spray][spray]] is a speed reading mode for emacs (similar to spritz).
+This is especially helpfull when reading ebooks with emacs.
+#+begin_src emacs-lisp
+  (use-package spray
+    :ensure t
+    :config
+    (global-set-key (kbd "<f6>") 'spray-mode))
+#+end_src
+
+** RSS (newsticker)
+#+begin_src emacs-lisp
+  (global-set-key (kbd "C-x w") 'newsticker-treeview) 
+#+end_src
 * Finalizers
 Reset debugger information
 #+begin_src emacs-lisp
   (setq debug-on-error nil)
   (setq debug-on-quit nil)
 #+end_src
+
 
