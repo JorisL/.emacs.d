@@ -1,0 +1,5 @@
+#+TITLE: (auto-insert-init-form (read-string "Title: "))
+#+AUTHOR: (auto-insert-init-form (user-full-name))
+#+DATE: (auto-insert-init-form (format-time-string "%Y-%m-%d"))
+#+ODT_STYLES_FILE: (auto-insert-init-form (expand-file-name "templates/my_odf_template.ott" org-directory))
+#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-readtheorg.setup
