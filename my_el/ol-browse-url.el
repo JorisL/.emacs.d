@@ -11,6 +11,9 @@
 PATH should be a topic that can be thrown at the man command."
   (browse-url path))
 
+(defun org-browse-url-store-link ()
+  "Store link to browse-url")
+
 (defun org-browse-url-export (link description format _)
   "Export a man page link from Org files."
   (let ((desc (or description link)))
