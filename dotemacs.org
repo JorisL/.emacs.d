@@ -8,6 +8,15 @@ Set debugger information.
   (setq byte-compile-debug t)
   (setq debug-on-quit t)
 #+end_src
+
+Load the "Garbage Collection Magic Hack".
+#+begin_src emacs-lisp
+  (use-package gcmh
+    :ensure t
+    :init
+    (gcmh-mode 1))
+#+end_src
+
 * Helper functions / definitions
 These are some functions / defenitions used for this config.
 #+begin_src emacs-lisp
@@ -30,12 +39,6 @@ Unix tools look for HOME, but this is normally not defined on Windows.
 #+begin_src emacs-lisp
   (require 'server)
   (unless (server-running-p)
-    (cond
-     ((eq system-type 'windows-nt)
-      (setq server-auth-dir "~\\.emacs.d\\server\\"))
-     ((eq system-type 'gnu/linux)
-      (setq server-auth-dir "~/.emacs.d/server/")))
-    (setq server-name "emacs-server-file")
     (server-start))
 #+end_src
 
@@ -271,13 +274,13 @@ Use the ~(setq variable value)~ syntax in that file, since the variable is alrea
 #+END_SRC
 
 ** Theme
-Configure [[https://github.com/hlissner/emacs-doom-themes][Doom-Nord]] color theme.
+Configure [[https://github.com/hlissner/emacs-doom-themes][Doom]] color theme.
 
 #+BEGIN_SRC emacs-lisp
   (use-package doom-themes
     :ensure t
     :config
-    (load-theme 'doom-nord t)
+    (load-theme 'doom-monokai-pro t)
     (doom-themes-org-config)
     (doom-themes-visual-bell-config)
     (doom-themes-set-faces nil
@@ -387,8 +390,60 @@ Use =vertico= as lightweight command completion tool (shown when using =C-x C-f=
 
 Configure some build-in emacs settings to have better minibuffer completion, which is therefore also used by =vertico=). E.g. fuzzy matching, regex, etc.. 
 #+begin_src emacs-lisp
-  (setq completion-styles '(initials partial-completion flex)) ; > Emacs 27.1
-  (setq completion-cycle-threshold 10)
+  (setq read-file-name-completion-ignore-case t
+        read-buffer-completion-ignore-case t
+        completion-cycle-threshold 10
+        completion-styles '(initials partial-completion flex)
+        completion-ignore-case t)
+#+end_src
+
+Add additional sources for completion using =consult=.
+#+begin_src emacs-lisp
+  (use-package consult
+    ;; Replace bindings. Lazily loaded due by `use-package'.
+    :bind (;; C-c bindings (mode-specific-map)
+           ;("C-c h" . consult-history)
+           ;("C-c m" . consult-mode-command)
+           ;("C-c b" . consult-bookmark)
+           ;("C-c k" . consult-kmacro)
+           ;; C-x bindings (ctl-x-map)
+           ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+           ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+           ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+           ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+           ;; Custom M-# bindings for fast register access
+           ("M-#" . consult-register-load)
+           ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+           ("C-M-#" . consult-register)
+           ;; Other custom bindings
+           ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+           ("<help> a" . consult-apropos)            ;; orig. apropos-command
+           ;; M-g bindings (goto-map)
+           ("M-g e" . consult-compile-error)
+           ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+           ("M-g g" . consult-goto-line)             ;; orig. goto-line
+           ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+           ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+           ("M-g m" . consult-mark)
+           ("M-g k" . consult-global-mark)
+           ("M-g i" . consult-imenu)
+           ("M-g I" . consult-project-imenu)
+           ;; M-s bindings (search-map)
+           ("M-s f" . consult-find)
+           ("M-s L" . consult-locate)
+           ("M-s g" . consult-grep)
+           ("M-s G" . consult-git-grep)
+           ("M-s r" . consult-ripgrep)
+           ("M-s l" . consult-line)
+           ("M-s m" . consult-multi-occur)
+           ("M-s k" . consult-keep-lines)
+           ("M-s u" . consult-focus-lines)
+           ;; Isearch integration
+           ("M-s e" . consult-isearch)
+           :map isearch-mode-map
+           ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
+           ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
+           ("M-s l" . consult-line)))                 ;; needed by consult-line to detect isearch
 #+end_src
 
 ** Suggest next key
@@ -421,7 +476,31 @@ when the cursor is on c, =expand-region= will select the word, after that everyt
 #+BEGIN_SRC emacs-lisp
   (use-package expand-region
     :ensure t
-    :bind ("C-=" . er/expand-region))
+    :bind
+    (("C-=" . er/expand-region)
+     ("C-+" . er/contract-region)
+     :map mode-specific-map
+     :prefix-map region-prefix-map
+     :prefix "r"
+     ("(" . er/mark-inside-pairs)
+     (")" . er/mark-outside-pairs)
+     ("'" . er/mark-inside-quotes)
+     ([34] . er/mark-outside-quotes) ; it's just a quotation mark
+     ("o" . er/mark-org-parent)
+     ("u" . er/mark-url)
+     ("b" . er/mark-org-code-block)
+     ("." . er/mark-method-call)
+     (">" . er/mark-next-accessor)
+     ("w" . er/mark-word)
+     ("d" . er/mark-defun)
+     ("e" . er/mark-email)
+     ("," . er/mark-symbol)
+     ("<" . er/mark-symbol-with-prefix)
+     (";" . er/mark-comment)
+     ("s" . er/mark-sentence)
+     ("S" . er/mark-text-sentence)
+     ("p" . er/mark-paragraph)
+     ("P" . er/mark-text-paragraph)))
 #+END_SRC
 
 ** Snippets
@@ -630,6 +709,20 @@ Use build-in =auto-insert= package to automatically insert a filetype specific t
        my-eval-auto-insert-init-form]))
 #+end_src
 
+** Buffer management
+Use =ibuffer= package as replacement for =list-buffers= such that we can operate
+on open buffers in a way similar to =dired=.
+#+begin_src emacs-lisp
+  (use-package ibuffer
+    :bind
+    ([remap list-buffers] . ibuffer))
+#+end_src
+
+** Auto close brackets
+#+begin_src emacs-lisp
+  (electric-pair-mode 1)
+#+end_src>
+
 * STARTED Org mode
 ** Basic settings
 #+begin_src emacs-lisp
@@ -694,6 +787,13 @@ Configure org-refile (=C-x C-w=) for allowing to refile in subheaders
   (setq org-refile-targets ( quote (("notes.org" :maxlevel . 9))))
 #+end_src
 
+Configure inline images to always have a certain width,
+unless they have a width attribute.
+(e.g. #+ATTR.*: width="200", resize to 200, otherwise resize to 400)
+#+begin_src emacs-lisp
+  (setq org-image-actual-width '(700))
+#+end_src
+
 ** Agenda
 #+begin_src emacs-lisp
   (setq org-agenda-window-setup 'current-window)
@@ -747,8 +847,8 @@ This is used for the bookmark capture template.
 Define custom "browse-url" hyperlink type to practically open a file/folder in the default OS application.
 Example; a link to a =.docx= file now opens in office instead of in Emacs as an archive.
 #+begin_src emacs-lisp
-  (load "~/.emacs.d/my_el/ol-browse-url.el")
-  (require 'ol-browse-url)
+  ;(load "~/.emacs.d/my_el/ol-browse-url.el")
+  ;(require 'ol-browse-url)
 #+end_src
 
 ** Babel
@@ -765,15 +865,19 @@ Generic org-babel settings
          (eshell . t)
          (calc . t)))
 
+  (add-to-list 'org-babel-tangle-lang-exts '("matlab" . "m"))
+
   (add-hook 'org-babel-after-execute-hook 'org-redisplay-inline-images)
 #+end_src
 ** Export
+*** Additional backends
 Add aditional export backends
 #+begin_src emacs-lisp
-  (require 'ox-taskjuggler)
-  (require 'ox-s5)
+;  (require 'ox-taskjuggler)
+;  (require 'ox-s5)
 #+end_src
 
+*** ODT/DOCX
 Setup odt/docx export
 #+begin_src emacs-lisp
   ;; When I tell Org-Mode to export to ODT at my day job, I actually want DOCX.
@@ -795,6 +899,7 @@ Setup odt/docx export
   (config-org-export-as-docx-via-odt)
 #+end_src
 
+*** COMMENT HTML
 Embed images in HTML export instead of linking; this way the files can easily be shared
 #+begin_src emacs-lisp
   (defun org-html--format-image (source attributes info)
@@ -806,9 +911,26 @@ Embed images in HTML export instead of linking; this way the files can easily be
                (buffer-string)))
             (file-name-nondirectory source)))
 #+end_src
+
+Remove html validation link
+#+begin_src emacs-lisp
+  (setq org-html-validation-link nil)
+#+end_src
+
+Remove syntax highlighting from code blocks, since our own is defined in custom CSS.
+#+begin_src emacs-lisp
+  (setq org-html-htmlize-output-type 'css)
+#+end_src
+
 ** Attachments
 #+begin_src emacs-lisp
   (setq org-attach-use-inheritance 't)
+#+end_src
+** Other
+Install =org-ql= package to have an query language for org-mode files.
+#+begin_src emacs-lisp
+;  (use-package org-ql
+;    :ensure t)
 #+end_src
 
 * Magit
@@ -850,6 +972,16 @@ In the modline, show the function being written:
   (add-hook 'org-mode-hook  #'which-function-mode)
 #+end_src
 
+*** aggressive indent mode
+mostly for elisp, but can be used for other languages
+
+#+begin_src emacs-lisp
+  (use-package aggressive-indent
+    :ensure t
+    :config
+    (add-hook 'emacs-lisp-mode-hook #'aggressive-indent-mode))
+#+end_src
+
 ** Lisp
 Always make sure that there are matching parens
 #+begin_src emacs-lisp
@@ -862,9 +994,20 @@ Highlight defined lisp symbols (when in elisp mode).
     :hook (emacs-lisp-mode . highlight-defined-mode))
 #+end_src
 
+*** adjust-parens
+package to adjust lisp parens based on indentation
+
+#+begin_src emacs-lisp
+  (use-package adjust-parens
+    :ensure t
+    :config
+    (add-hook 'emacs-lisp-mode-hook #'adjust-parens-mode)
+    (add-hook 'clojure-mode-hook #'adjust-parens-mode))
+#+end_src
+
 ** Python
 ** TODO MATLAB
-*** TODO Matlab REPL
+*** TODO Matlab REPL / Shell on Windows
 Matlab doesn't provide a terminal/cmdline REPL in windows :(.
 Therefore I've botched together a [[file:my_scripts/matlab_engine_repl.py][custom Matlab REPL]] in Python, with use of the Matlab-engine library from Mathworks.
 Furthermore; I've used the Emacs comint (command-line interface) library to write a major mode for this REPL,
@@ -876,8 +1019,7 @@ Remark; the custom Matlab REPL doesn't support multi-line commands (yet?).
 TODO:
 - [X] run script in current MATLAB directory, instead of in tmp folder
 - [X] find out way to change directory?
-- [ ] multiline commands
-  - comint-input-filter-functions
+- [X] multiline commands
 
 Comint code based on [[https://www.masteringemacs.org/article/comint-writing-command-interpreter][this masteringemacs article]].
 
@@ -942,6 +1084,17 @@ Comint code based on [[https://www.masteringemacs.org/article/comint-writing-com
   (add-hook 'matlab-engine-repl-mode-hook 'matlab-engine-repl--initialize)
 #+end_src
 
+This script also has a command line option for org-babel.
+When this is used the program will not run in a while loop,
+but will just wait until it receives an EOF and then evaluate the entire input.
+This causes multi-line inputs, e.g. if/else loops or similar where only a single line gives an syntax error,
+to be correctly evaluated.
+We only have to change the org-babel command for ob-matlab to this script including the command line parameter.
+Remark; in contradiction to the comint interface we can just run it in standard python (which is done by default when we directly try to execute a .py file).
+#+begin_src emacs-lisp
+  (setq org-babel-matlab-shell-command (concat (expand-file-name "my_scripts/matlab_engine_repl.py") " --orgbabel"))
+#+end_src
+
 ** Julia
 #+begin_src emacs-lisp
   (use-package julia-mode)
@@ -974,6 +1127,11 @@ The interactive function is bound to z-p within calc-mode.
    (define-key calc-mode-map "zp" 'calc-User-parallel)
   )))
 
+#+end_src
+** Dired
+#+begin_src emacs-lisp
+  (setq dired-dwim-target t)
+  (setq delete-by-moving-to-trash t)
 #+end_src
 
 ** Tools
@@ -1063,6 +1221,14 @@ This is especially helpfull when reading ebooks with emacs.
 ** RSS (newsticker)
 #+begin_src emacs-lisp
   (global-set-key (kbd "C-x w") 'newsticker-treeview) 
+#+end_src
+
+** Try
+[[http://github.com/larstvei/try][Try]] new packages without installing them.
+#+begin_src emacs-lisp
+  (use-package try
+    :ensure t
+    :defer t)
 #+end_src
 * Finalizers
 Reset debugger information
