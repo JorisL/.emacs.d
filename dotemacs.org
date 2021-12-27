@@ -34,6 +34,14 @@ Unix tools look for HOME, but this is normally not defined on Windows.
     (setq abbreviated-home-dir nil))
 #+end_src
 
+Setup the emacs path such that it is the same as the system shell
+#+begin_src emacs-lisp
+  (use-package exec-path-from-shell
+    :ensure t
+    :config
+    (exec-path-from-shell-initialize))
+#+end_src
+
 * Generic Emacs settings
 ** Server
 #+begin_src emacs-lisp
@@ -274,29 +282,33 @@ Use the ~(setq variable value)~ syntax in that file, since the variable is alrea
 #+END_SRC
 
 ** Theme
-Configure [[https://github.com/hlissner/emacs-doom-themes][Doom]] color theme.
+Configure [[https://protesilaos.com/emacs/modus-themes][modus vivendi]] theme.
+This theme is chosen since it has a good contrast between elements,
+and because it has many settings to improve accesability (e.g. to help with deuteranopia).
 
-#+BEGIN_SRC emacs-lisp
-  (use-package doom-themes
+Remark: theme will be included by default in emacs 28.
+For info on the theme, execute (info "(modus-themes) Top")
+
+#+begin_src emacs-lisp
+  (use-package modus-themes
     :ensure t
+    :init
+    ;; Add all your customizations prior to loading the themes
+    (setq modus-themes-deuteranopia t
+          modus-themes-italic-constructs t
+          modus-themes-syntax '(green-strings yellow-comments alt-syntax)
+          modus-themes-subtle-line-numbers t
+          modus-themes-intense-markup t
+          modus-themes-paren-match '(intense underline)
+          modus-themes-org-blocks 'gray-background)
+
+    ;; Load the theme files before enabling a theme (else you get an error).
+    (modus-themes-load-themes)
     :config
-    (load-theme 'doom-monokai-pro t)
-    (doom-themes-org-config)
-    (doom-themes-visual-bell-config)
-    (doom-themes-set-faces nil
-;      '(default :font me/font-family :height me/font-size-default)
-      '(doom-modeline-bar :background 'unspecified)
-      '(flycheck-error :underline `(:color ,error :style line))
-      '(flycheck-info :underline `(:color ,highlight :style line))
-      '(flycheck-warning :underline `(:color ,warning :style line))
-      '(fringe :background 'unspecified)
-      '(helpful-heading :height 'unspecified)
-      '(org-block-begin-line :background 'unspecified :inherit 'shadow)
-      '(org-quote :background 'unspecified :inherit '(font-lock-doc-face org-block))
-      '(swiper-line-face :extend t)
-      '(vertical-border :background 'unspecified :inverse-video t)
-      '(which-key-command-description-face :foreground 'unspecified)))
-#+END_SRC
+    ;; Load the theme of your choice:
+    (modus-themes-load-vivendi)
+    :bind ("<f7>" . modus-themes-toggle))
+#+end_src
 
 ** God mode
 [[https://github.com/emacsorphanage/god-mode][God mode]] is used to get modal editing with regular emacs keybindings.
@@ -314,16 +326,124 @@ The mode can be toggled using =Esc=.
            ("C-x C-2" . split-window-below)
            ("C-x C-3" . split-window-right)
            ("C-x C-0" . delete-window)))
-    :config
-    (defun my-god-mode-update-cursor ()
-      (setq cursor-type (if (or god-local-mode buffer-read-only)
-                            'box
-                          'bar)))
-    (add-hook 'god-mode-enabled-hook #'my-god-mode-update-cursor)
-    (add-hook 'god-mode-disabled-hook #'my-god-mode-update-cursor)
-    (define-key god-local-mode-map (kbd "z") #'repeat)
-    ;(define-key god-local-mode-map (kbd "i") #'god-local-mode)
+  :config
+  (defun my-god-mode-update-cursor ()
+    (setq cursor-type (if (or god-local-mode buffer-read-only)
+                          'box
+                        'bar)))
+  (add-hook 'god-mode-enabled-hook #'my-god-mode-update-cursor)
+  (add-hook 'god-mode-disabled-hook #'my-god-mode-update-cursor)
+  (define-key god-local-mode-map (kbd "z") #'repeat)
+                                          ;(define-key god-local-mode-map (kbd "i") #'god-local-mode)
 #+END_SRC
+
+** isearch
+Set arrow keys in isearch. left/right is backward/forward ,up/down is history. press Return to exit
+#+begin_src emacs-lisp
+  (progn
+    (define-key isearch-mode-map (kbd "<up>") 'isearch-ring-retreat )
+    (define-key isearch-mode-map (kbd "<down>") 'isearch-ring-advance )
+
+    (define-key isearch-mode-map (kbd "<left>") 'isearch-repeat-backward)
+    (define-key isearch-mode-map (kbd "<right>") 'isearch-repeat-forward)
+
+    (define-key minibuffer-local-isearch-map (kbd "<left>") 'isearch-reverse-exit-minibuffer)
+    (define-key minibuffer-local-isearch-map (kbd "<right>") 'isearch-forward-exit-minibuffer)
+
+    (define-key isearch-mode-map (kbd "C-v") 'avy-isearch))
+#+end_src
+** STARTED Embark
+Context menu for current selection (also integrates nicely with avy)
+
+#+begin_src emacs-lisp
+  (use-package embark
+    :ensure t
+    :config  :bind
+    (("M-." . embark-act)          ;; pick some comfortable binding
+     ("C-;" . embark-dwim)         ;; 
+     ("C-h B" . embark-bindings))) ;; alternative for `describe-bindings')
+#+end_src
+
+** STARTED Avy
+Jump to, or perform actions, on part of text on screen by typing its first characters.
+
+#+begin_src emacs-lisp
+  (use-package avy
+    :ensure t
+    :config
+    (avy-setup-default)
+    ;; Revind C-v (scroll-up-command) since I never use it,
+    ;; and since it's one of the easier commands to do without leaving home row.
+    ;; (especially when TAB/CAPS lock maps to CTRL when held)
+    (global-set-key (kbd "C-v") 'avy-goto-char-timer)
+    (global-set-key (kbd "C-c C-j") 'avy-resume)
+
+    (setq avy-style 'pre)
+
+    ;; Kill text
+    (defun avy-action-kill-whole-line (pt)
+      (save-excursion
+        (goto-char pt)
+        (kill-whole-line))
+      (select-window
+       (cdr
+        (ring-ref avy-ring 0)))
+      t)
+
+    (setf (alist-get ?k avy-dispatch-alist) 'avy-action-kill-stay
+          (alist-get ?K avy-dispatch-alist) 'avy-action-kill-whole-line)
+
+    ;; Copy text
+    (defun avy-action-copy-whole-line (pt)
+      (save-excursion
+        (goto-char pt)
+        (cl-destructuring-bind (start . end)
+            (bounds-of-thing-at-point 'line)
+          (copy-region-as-kill start end)))
+      (select-window
+       (cdr
+        (ring-ref avy-ring 0)))
+      t)
+
+    (setf (alist-get ?w avy-dispatch-alist) 'avy-action-copy
+          (alist-get ?W avy-dispatch-alist) 'avy-action-copy-whole-line)
+
+    ;; Yank text
+    (defun avy-action-yank-whole-line (pt)
+      (avy-action-copy-whole-line pt)
+      (save-excursion (yank))
+      t)
+
+    (setf (alist-get ?y avy-dispatch-alist) 'avy-action-yank
+          (alist-get ?Y avy-dispatch-alist) 'avy-action-yank-whole-line)
+
+    ;; Transpose/Move text
+    (defun avy-action-teleport-whole-line (pt)
+      (avy-action-kill-whole-line pt)
+      (save-excursion (yank)) t)
+
+    (setf (alist-get ?t avy-dispatch-alist) 'avy-action-teleport
+          (alist-get ?T avy-dispatch-alist) 'avy-action-teleport-whole-line)
+
+    ;; Mark text
+    (defun avy-action-mark-to-char (pt)
+      (activate-mark)
+      (goto-char pt))
+
+    (setf (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char)
+
+    ;; Embark
+    (defun avy-action-embark (pt)
+      (unwind-protect
+          (save-excursion
+            (goto-char pt)
+            (embark-act))
+        (select-window
+         (cdr (ring-ref avy-ring 0))))
+      t)
+
+    (setf (alist-get ?. avy-dispatch-alist) 'avy-action-embark))
+#+end_src
 
 ** Custom keybindings
 Map =comment-line= (normally =C-x C-;=) to =C-;=.
@@ -349,7 +469,7 @@ After this has been defined, the =delete-char= has to be bound back to the =<del
     (kill-line)
     (yank)
     (open-line 1)
-    (next-line 1)
+    (forward-line 1)
     (yank)
   )
   (global-set-key (kbd "C-d") 'duplicate-line)
@@ -362,30 +482,30 @@ Use =vertico= as lightweight command completion tool (shown when using =C-x C-f=
 =Marginalia= shows additional info on the right of the minibuffer (example: in file select mode it shows the size, modification date, etc.).
 
 #+begin_src emacs-lisp
-  (use-package vertico
-    :ensure t
-    :bind (:map vertico-map
-           ("C-j" . vertico-next)
-           ("C-k" . vertico-previous)
-           ("C-f" . vertico-exit)
-           :map minibuffer-local-map
-           ("M-h" . backward-kill-word))
-    :custom
-    (vertico-cycle t)
-    :init
-    (vertico-mode))
+(use-package vertico
+  :ensure t
+  :bind (:map vertico-map
+         ("C-j" . vertico-next)
+         ("C-k" . vertico-previous)
+         ("C-f" . vertico-exit)
+         :map minibuffer-local-map
+         ("M-h" . backward-kill-word))
+  :custom
+  (vertico-cycle t)
+  :init
+  (vertico-mode))
 
-  (use-package savehist
-    :init
-    (savehist-mode))
+(use-package savehist
+  :init
+  (savehist-mode))
 
-  (use-package marginalia
-    :after vertico
-    :ensure t
-    :custom
-    (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
-    :init
-    (marginalia-mode))
+(use-package marginalia
+  :after vertico
+  :ensure t
+  :custom
+  (marginalia-annotators '(marginalia-annotators-heavy marginalia-annotators-light nil))
+  :init
+  (marginalia-mode))
 #+end_src
 
 Configure some build-in emacs settings to have better minibuffer completion, which is therefore also used by =vertico=). E.g. fuzzy matching, regex, etc.. 
@@ -400,6 +520,7 @@ Configure some build-in emacs settings to have better minibuffer completion, whi
 Add additional sources for completion using =consult=.
 #+begin_src emacs-lisp
   (use-package consult
+    :ensure t
     ;; Replace bindings. Lazily loaded due by `use-package'.
     :bind (;; C-c bindings (mode-specific-map)
            ;("C-c h" . consult-history)
@@ -439,11 +560,21 @@ Add additional sources for completion using =consult=.
            ("M-s k" . consult-keep-lines)
            ("M-s u" . consult-focus-lines)
            ;; Isearch integration
-           ("M-s e" . consult-isearch)
+           ("M-s e" . consult-isearch-history)
            :map isearch-mode-map
-           ("M-e" . consult-isearch)                 ;; orig. isearch-edit-string
-           ("M-s e" . consult-isearch)               ;; orig. isearch-edit-string
+           ("M-e" . consult-isearch-history)                 ;; orig. isearch-edit-string
+           ("M-s e" . consult-isearch-history)               ;; orig. isearch-edit-string
            ("M-s l" . consult-line)))                 ;; needed by consult-line to detect isearch
+#+end_src
+
+** TODO Auto completetion
+#+begin_src emacs-lisp
+(use-package fancy-dabbrev
+  :ensure t
+  :config
+  (global-fancy-dabbrev-mode)
+  (global-set-key (kbd "TAB") 'fancy-dabbrev-expand-or-indent)
+  (global-set-key (kbd "<backtab>") 'fancy-dabbrev-backward))
 #+end_src
 
 ** Suggest next key
@@ -535,30 +666,6 @@ Enable =prettify-simbols= mode.
 This will visually replace certain sets of characters by other characters (for example in elisp; lambda by λ)
 #+begin_src emacs-lisp
   (global-prettify-symbols-mode 1)
-#+end_src
-
-** Auto complete
-Use =company-mode= for autocompletion.
-#+begin_src emacs-lisp
-  (use-package company
-    :ensure t
-    :defer t
-    :init (global-company-mode)
-    :config
-    (progn
-      ;; Use Company for completion
-      (bind-key [remap completion-at-point] #'company-complete company-mode-map)
-
-      (setq company-tooltip-align-annotations t
-            ;; Easy navigation to candidates with M-<n>
-            company-show-numbers t)
-      (defvar company-dabbrev-downcase nil))
-    :diminish company-mode)
-
-(with-eval-after-load 'company
-  (define-key company-active-map (kbd "<return>") nil)
-  (define-key company-active-map (kbd "RET") nil)
-  (define-key company-active-map (kbd "C-SPC") #'company-complete-selection))
 #+end_src
 
 ** Better kill/yank
@@ -723,223 +830,159 @@ on open buffers in a way similar to =dired=.
   (electric-pair-mode 1)
 #+end_src>
 
-* STARTED Org mode
-** Basic settings
+* Org mode
 #+begin_src emacs-lisp
-  ;(use-package 'org-plus-contrib
-  ;  :ensure t)
+;;;; general settings
+(require 'org-tempo)
+(setq org-startup-folded t)
+(setq org-startup-indented 'f)
+(setq org-special-ctrl-a/e 't)
+(setq org-default-notes-file (concat org-directory "/notes.org"))
+(defvar org-default-read-it-later-file (concat org-directory "/read_it_later.org"))
+(define-key global-map "\C-cc" 'org-capture)
+(global-set-key "\C-cl" 'org-store-link)
+(global-set-key "\C-ca" 'org-agenda)
+(setq org-src-fontify-natively 't)
+(setq org-src-tab-acts-natively 't)
+(setq org-hide-emphasis-markers 't)
+(setq org-todo-keywords
+      '((sequence "TODO" "STARTED" "WAITING" "|" "DONE" "CANCELLED")))
+(setq org-pretty-entities t)
+(setq org-capture-templates
+      '(
+        ("t" "Todo" entry (file+headline org-default-notes-file "Inbox")
+         "* TODO %^{TASK} %^g\n%^{DEADLINE}p%U\n%?" :empty-lines 1)
+        ("n" "Note" entry (file+headline org-default-notes-file "Inbox")
+         "* NOTE %?\n%U" :empty-lines 1)       
+        ("b" "Bookmark URL" entry (file+olp org-default-notes-file "Bookmarks" "Unread")
+         "* %(my-org-get-link-from-url) :bookmark:\n:PROPERTIES:\n:CREATED: %U\n:END:\n" :empty-lines 1)
+        ))
+(setq org-catch-invisible-edits 'show)
+(setq org-use-sub-superscripts '{})
+
+;; use org-mode for scratch buffer instead of elisp-mode
+(setq initial-buffer-choice  org-default-notes-file)
+
+;; quick hack to get company-mode autocomplete working with #+ blocks in org-mode
+;; (defun trigger-org-company-complete ()
+;;   "Begins company-complete in org-mode buffer after pressing #+ chars."
+;;   (interactive)
+;;   (if (string-equal "#" (string (preceding-char)))
+;;       (progn
+;;         (insert "+")
+;;         (company-complete))
+;;     (insert "+")))
+;; (eval-after-load 'org '(define-key org-mode-map
+;;                          (kbd "+") 'trigger-org-company-complete))
+
+;; confige org-refile (C-x C-w) to allow refiling in subheaders
+(setq org-refile-use-outline-path 'file)
+(setq org-outline-path-complete-in-steps nil)
+(setq org-refile-allow-creating-parent-nodes 'confirm)
+(setq org-refile-targets ( quote (("notes.org" :maxlevel . 9))))
+
+;; set max. inline image width, unless they have a with attribute
+(setq org-image-actual-width '(700))
+
+
+;;;; agenda
+(setq org-agenda-window-setup 'current-window)
+(setq org-agenda-start-day "-1d")
+(setq org-agenda-span 10)
+(setq org-agenda-start-on-weekday nil)
+
+
+;;;; babel
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '(
+   (python . t)
+   (C      . t)
+   (matlab . t)
+   (plantuml . t)
+   (emacs-lisp . t)
+   (lisp . t)
+   (eshell . t)
+   (calc . t)
+   (shell . t)))
+(setq org-confirm-babel-evaluate nil)
+(setq org-src-window-setup 'current-window)
+(setq org-edit-src-content-indentation 0)
+(add-to-list 'org-babel-tangle-lang-exts '("matlab" . "m"))
+
+;; function to update inline images after executing a babel code block.
+;; this is helpfull for when a babel code block updates an image on disk
+;; (mostly used with matlab, where matlab saves a figure to a file, which is linked to in org-mode)
+(add-hook 'org-babel-after-execute-hook 'org-redisplay-inline-images)
+
+
+
+;;;; export
+;; When I tell Org-Mode to export to ODT at my day job, I actually want DOCX.
+(setq org-odt-preferred-output-format "docx")
+;; According to Chen Bin (http://blog.binchen.org/posts/how-to-take-screen-shot-for-business-people-efficiently-in-emacs.html),
+;; the above should be sufficient on Linux, but he needed more setup on OSX. Let's see if I can adapt his code to Windows.
+(defun config-org-export-as-docx-via-odt ()
+  (interactive)
+  (let ((cmd "C:/Program Files/LibreOffice/program/soffice.exe"))
+    (when (and (eq system-type 'windows-nt) (file-exists-p cmd))
+      ;; org v7
+      (setq org-export-odt-convert-processes '(("LibreOffice" "\"C:\\Program Files\\LibreOffice\\program\\soffice.exe\" --headless --convert-to %f%x --outdir %d %i")))
+      ;; org v8/v9
+      (setq org-odt-convert-processes '(("LibreOffice" "\"C:\\Program Files\\LibreOffice\\program\\soffice.exe\" --headless --convert-to %f%x --outdir %d %i"))))
+    ))
+;; Run the function I just defined to set up org-export-as-docx-via-odt.
+(config-org-export-as-docx-via-odt)
+
+;; setup images to be embedded directly in html file instead of being linked to.
+(defun org-html--format-image (source attributes info)
+  (format "<img src=\"data:image/%s;base64,%s\"%s />"
+          (or (file-name-extension source) "")
+          (base64-encode-string
+           (with-temp-buffer
+             (insert-file-contents-literally source)
+             (buffer-string)))
+          (file-name-nondirectory source)))
+
+(setq org-html-validation-link nil)
+(setq org-html-htmlize-output-type 'css)
+
+
+;;;; attachments
+(setq org-attach-use-inheritance 't)
+
+
+;;;; custom additions
+;; define function (my-org-insert-link) to insert a link to an URL,
+;; and to set the title of that link to the title of that webpage.
+(require 'mm-url) ; to include mm-url-decode-entities-string
+
+(defun my-org-insert-link ()
+  "Insert org link where default description is set to html title."
+  (interactive)
+  (let* ((url (read-string "URL: "))
+         (title (my-get-html-title-from-url url)))
+    (org-insert-link nil url title)))
+
+(defun my-get-html-title-from-url (url)
+  "Return content in <title> tag."
+  (let (x1 x2 (download-buffer (url-retrieve-synchronously url)))
+    (with-current-buffer download-buffer
+      (goto-char (point-min))
+      (setq x1 (search-forward "<title>"))
+      (search-forward "</title>")
+      (setq x2 (search-backward "<"))
+      (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)))))
+
+(defun my-org-get-link-from-url ()
+  "Return org-mode link where default description is set to html title."
+  (interactive)
+  (let* ((url (read-string "URL: "))
+         (title (my-get-html-title-from-url url)))
+    (concat "[[" url "][" title "]]")))
 #+end_src
 
-#+begin_src emacs-lisp
-  (require 'org-tempo)
-  (setq org-startup-folded t)
-  (setq org-startup-indented 'f)
-  (setq org-special-ctrl-a/e 't)
-  (setq org-default-notes-file (concat org-directory "/notes.org"))
-  (defvar org-default-read-it-later-file (concat org-directory "/read_it_later.org"))
-  (define-key global-map "\C-cc" 'org-capture)
-  (global-set-key "\C-cl" 'org-store-link)
-  (global-set-key "\C-ca" 'org-agenda)
-  (setq org-src-fontify-natively 't)
-  (setq org-src-tab-acts-natively 't)
-  (setq org-src-window-setup 'current-window)
-  (setq org-hide-emphasis-markers 't)
-  (setq org-todo-keywords
-        '((sequence "TODO" "STARTED" "WAITING" "|" "DONE" "CANCELLED")))
-  (setq org-pretty-entities t)
-  (defvar org-capture-templates)
-  (setq org-capture-templates
-        '(
-          ("t" "Todo" entry (file+headline org-default-notes-file "Inbox")
-           "* TODO %^{TASK} %^g\n%^{DEADLINE}p%U\n%?" :empty-lines 1)
-          ("n" "Note" entry (file+headline org-default-notes-file "Inbox")
-           "* NOTE %?\n%U" :empty-lines 1)       
-          ("b" "Bookmark URL" entry (file+olp org-default-notes-file "Bookmarks" "Unread")
-           "* %(my-org-get-link-from-url) :bookmark:\n:PROPERTIES:\n:CREATED: %U\n:END:\n" :empty-lines 1)
-          ))
-#+end_src
-
-Automatically open default notes file when starting emacs
-#+begin_src emacs-lisp
-  (setq initial-buffer-choice  org-default-notes-file)
-#+end_src
-
-Quick hack to get company autocomplete working with =#-= in org-mode
-#+begin_src emacs-lisp
-  (defun trigger-org-company-complete ()
-    "Begins company-complete in org-mode buffer after pressing #+ chars."
-    (interactive)
-    (if (string-equal "#" (string (preceding-char)))
-      (progn
-        (insert "+")
-        (company-complete))
-      (insert "+")))
-
-  (eval-after-load 'org '(define-key org-mode-map
-                 (kbd "+") 'trigger-org-company-complete))
-#+end_src
-
-Configure org-refile (=C-x C-w=) for allowing to refile in subheaders
-#+begin_src emacs-lisp
-  (setq org-refile-use-outline-path 'file)
-  (setq org-outline-path-complete-in-steps nil)
-  (setq org-refile-allow-creating-parent-nodes 'confirm)
-  (setq org-refile-targets ( quote (("notes.org" :maxlevel . 9))))
-#+end_src
-
-Configure inline images to always have a certain width,
-unless they have a width attribute.
-(e.g. #+ATTR.*: width="200", resize to 200, otherwise resize to 400)
-#+begin_src emacs-lisp
-  (setq org-image-actual-width '(700))
-#+end_src
-
-** Agenda
-#+begin_src emacs-lisp
-  (setq org-agenda-window-setup 'current-window)
-  (setq org-agenda-start-day "-1d")
-  (setq org-agenda-span 10)
-  (setq org-agenda-start-on-weekday nil)
-#+end_src
-** Images
-Use =org-download= to easily place images in org-mode.
-#+begin_src emacs-lisp
-  (use-package org-download
-    :ensure t
-    :after org
-    :init
-    (setq org-image-actual-width nil))
-#+end_src
-
-** Links
-Define function =my-org-insert-link= to insert org-mode url's with the title of the web page as link description.
-Taken from [[https://orgmode.org/worg/org-hacks.html#sec-1-6-3][Org ad hoc code, quick hacks and workarounds]] (Insert link with HTML title as default description).
-=my-org-get-link-from-url= is a simiar function, but instead of inserting the formatted org-link it only returns it.
-This is used for the bookmark capture template.
-#+begin_src emacs-lisp
-  (require 'mm-url) ; to include mm-url-decode-entities-string
-
-  (defun my-org-insert-link ()
-    "Insert org link where default description is set to html title."
-    (interactive)
-    (let* ((url (read-string "URL: "))
-       (title (my-get-html-title-from-url url)))
-      (org-insert-link nil url title)))
-
-  (defun my-get-html-title-from-url (url)
-    "Return content in <title> tag."
-    (let (x1 x2 (download-buffer (url-retrieve-synchronously url)))
-      (with-current-buffer download-buffer
-    (goto-char (point-min))
-    (setq x1 (search-forward "<title>"))
-    (search-forward "</title>")
-    (setq x2 (search-backward "<"))
-    (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)))))
-
-  (defun my-org-get-link-from-url ()
-    "Return org-mode link where default description is set to html title."
-    (interactive)
-      (let* ((url (read-string "URL: "))
-       (title (my-get-html-title-from-url url)))
-      (concat "[[" url "][" title "]]")))
-#+end_src
-
-Define custom "browse-url" hyperlink type to practically open a file/folder in the default OS application.
-Example; a link to a =.docx= file now opens in office instead of in Emacs as an archive.
-#+begin_src emacs-lisp
-  ;(load "~/.emacs.d/my_el/ol-browse-url.el")
-  ;(require 'ol-browse-url)
-#+end_src
-
-** Babel
-Generic org-babel settings
-#+begin_src emacs-lisp
-    (org-babel-do-load-languages
-       'org-babel-load-languages
-       '(
-         (python . t)
-         (C      . t)
-         (matlab . t)
-         (plantuml . t)
-         (emacs-lisp . t)
-         (eshell . t)
-         (calc . t)))
-
-  (add-to-list 'org-babel-tangle-lang-exts '("matlab" . "m"))
-
-  (add-hook 'org-babel-after-execute-hook 'org-redisplay-inline-images)
-#+end_src
-** Export
-*** Additional backends
-Add aditional export backends
-#+begin_src emacs-lisp
-;  (require 'ox-taskjuggler)
-;  (require 'ox-s5)
-#+end_src
-
-*** ODT/DOCX
-Setup odt/docx export
-#+begin_src emacs-lisp
-  ;; When I tell Org-Mode to export to ODT at my day job, I actually want DOCX.
-  (setq org-odt-preferred-output-format "docx")
-
-  ;; According to Chen Bin (http://blog.binchen.org/posts/how-to-take-screen-shot-for-business-people-efficiently-in-emacs.html),
-  ;; the above should be sufficient on Linux, but he needed more setup on OSX. Let's see if I can adapt his code to Windows.
-  (defun config-org-export-as-docx-via-odt ()
-    (interactive)
-    (let ((cmd "C:/Program Files/LibreOffice/program/soffice.exe"))
-      (when (and (eq system-type 'windows-nt) (file-exists-p cmd))
-        ;; org v7
-        (setq org-export-odt-convert-processes '(("LibreOffice" "\"C:\\Program Files\\LibreOffice\\program\\soffice.exe\" --headless --convert-to %f%x --outdir %d %i")))
-        ;; org v8/v9
-        (setq org-odt-convert-processes '(("LibreOffice" "\"C:\\Program Files\\LibreOffice\\program\\soffice.exe\" --headless --convert-to %f%x --outdir %d %i"))))
-      ))
-
-  ;; Run the function I just defined to set up org-export-as-docx-via-odt.
-  (config-org-export-as-docx-via-odt)
-#+end_src
-
-*** COMMENT HTML
-Embed images in HTML export instead of linking; this way the files can easily be shared
-#+begin_src emacs-lisp
-  (defun org-html--format-image (source attributes info)
-    (format "<img src=\"data:image/%s;base64,%s\"%s />"
-            (or (file-name-extension source) "")
-            (base64-encode-string
-             (with-temp-buffer
-               (insert-file-contents-literally source)
-               (buffer-string)))
-            (file-name-nondirectory source)))
-#+end_src
-
-Remove html validation link
-#+begin_src emacs-lisp
-  (setq org-html-validation-link nil)
-#+end_src
-
-Remove syntax highlighting from code blocks, since our own is defined in custom CSS.
-#+begin_src emacs-lisp
-  (setq org-html-htmlize-output-type 'css)
-#+end_src
-
-** Attachments
-#+begin_src emacs-lisp
-  (setq org-attach-use-inheritance 't)
-#+end_src
-** Other
-Install =org-ql= package to have an query language for org-mode files.
-#+begin_src emacs-lisp
-;  (use-package org-ql
-;    :ensure t)
-#+end_src
-
-* Magit
-#+begin_src emacs-lisp
-  (use-package magit
-    :ensure t
-    :bind (("C-x g" . 'magit-status)))
-#+end_src
-* TODO Programming
+* Programming
 ** Generic
 *** Auto completion
 =company-mode= (Complete Anything) is used as autocomplete engine.
@@ -979,7 +1022,8 @@ mostly for elisp, but can be used for other languages
   (use-package aggressive-indent
     :ensure t
     :config
-    (add-hook 'emacs-lisp-mode-hook #'aggressive-indent-mode))
+    (add-hook 'emacs-lisp-mode-hook #'aggressive-indent-mode)
+    (add-hook 'lisp-mode-hook #'aggressive-indent-mode))
 #+end_src
 
 ** Lisp
@@ -994,20 +1038,33 @@ Highlight defined lisp symbols (when in elisp mode).
     :hook (emacs-lisp-mode . highlight-defined-mode))
 #+end_src
 
-*** adjust-parens
-package to adjust lisp parens based on indentation
-
+Setup lispy, which is a vi-like mode for lisp editing.
 #+begin_src emacs-lisp
-  (use-package adjust-parens
+  (use-package lispy
     :ensure t
     :config
-    (add-hook 'emacs-lisp-mode-hook #'adjust-parens-mode)
-    (add-hook 'clojure-mode-hook #'adjust-parens-mode))
+    (progn (setq lispy-compat '(god-mode edebug))
+           (add-hook 'emacs-lisp-mode-hook (lambda () (lispy-mode 1)))
+           (add-hook 'lisp-mode-hook (lambda () (lispy-mode 1)))
+           (defun conditionally-enable-lispy ()
+             (when (eq this-command 'eval-expression)
+               (lispy-mode 1)))
+           (add-hook 'minibuffer-setup-hook 'conditionally-enable-lispy)))
 #+end_src
 
 ** Python
-** TODO MATLAB
-*** TODO Matlab REPL / Shell on Windows
+*** Black
+Black is an autoformatter for python code.
+By installing =python-black= it can be ran automatically when a file is saved.
+
+#+begin_src emacs-lisp
+ (use-package python-black
+   :after python
+   :hook (python-mode . python-black-on-save-mode))
+#+end_src
+
+** MATLAB
+*** Matlab REPL / Shell on Windows
 Matlab doesn't provide a terminal/cmdline REPL in windows :(.
 Therefore I've botched together a [[file:my_scripts/matlab_engine_repl.py][custom Matlab REPL]] in Python, with use of the Matlab-engine library from Mathworks.
 Furthermore; I've used the Emacs comint (command-line interface) library to write a major mode for this REPL,
@@ -1015,11 +1072,6 @@ similar as to the elisp or python REPL's included in Emacs.
 This Emacs REPL interface also includes support for MATLAB syntax highlighting.
 
 Remark; the custom Matlab REPL doesn't support multi-line commands (yet?).
-
-TODO:
-- [X] run script in current MATLAB directory, instead of in tmp folder
-- [X] find out way to change directory?
-- [X] multiline commands
 
 Comint code based on [[https://www.masteringemacs.org/article/comint-writing-command-interpreter][this masteringemacs article]].
 
@@ -1128,18 +1180,20 @@ The interactive function is bound to z-p within calc-mode.
   )))
 
 #+end_src
+
 ** Dired
 #+begin_src emacs-lisp
   (setq dired-dwim-target t)
   (setq delete-by-moving-to-trash t)
 #+end_src
 
-** Tools
+** Custom Tools
 *** Excel remove sheet protection
 I've written a small emacs function which removes the sheet-protection of an MS Excel file.
 #+begin_src emacs-lisp
   (load "~/.emacs.d/my_el/excel-remove-sheet-protection.el")
 #+end_src
+
 ** Search / replace
 Bride the functionalities from =re-builder= and =*-replace-regexp= such that regular expressions can be made using =re-builder= and directly used as input for =*-replace-regexp=.
 See [[https://karthinks.com/software/bridging-islands-in-emacs-1/]] for additional reference.
@@ -1208,16 +1262,6 @@ Use ereader package for Emacs to be able to open ebooks.
     :ensure t)
 #+end_src
 
-** Fast reading
-[[https://github.com/emacsmirror/spray][spray]] is a speed reading mode for emacs (similar to spritz).
-This is especially helpfull when reading ebooks with emacs.
-#+begin_src emacs-lisp
-  (use-package spray
-    :ensure t
-    :config
-    (global-set-key (kbd "<f6>") 'spray-mode))
-#+end_src
-
 ** RSS (newsticker)
 #+begin_src emacs-lisp
   (global-set-key (kbd "C-x w") 'newsticker-treeview) 
@@ -1230,7 +1274,18 @@ This is especially helpfull when reading ebooks with emacs.
     :ensure t
     :defer t)
 #+end_src
-* Finalizers
+** Magit
+#+begin_src emacs-lisp
+  (use-package magit
+    :ensure t
+    :bind (("C-x g" . 'magit-status)))
+#+end_src
+
+** Tramp
+#+begin_src emacs-lisp
+(setq tramp-default-method "ssh")
+#+end_src
+* Finxfalizers
 Reset debugger information
 #+begin_src emacs-lisp
   (setq debug-on-error nil)
